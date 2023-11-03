@@ -24,3 +24,5 @@ Release/
 /mingw/
 /content
 CMakeSettings.json
+/bin/
+/.idea/

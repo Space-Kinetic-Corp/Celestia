@@ -1,0 +1,35 @@
+{
+  "name": "celestia",
+  "version": "0.1.0",
+  "description": "Space Kinetic fork of Celestia",
+  "license": "GPL-2.0",
+  "dependencies": [
+    {
+      "name": "libpng"
+    },
+    {
+      "name": "gettext"
+    },
+    {
+      "name": "libepoxy"
+    },
+    {
+      "name": "libjpeg-turbo"
+    },
+    {
+      "name": "gperf"
+    },
+    {
+      "name": "luajit"
+    },
+    {
+      "name": "fmt"
+    },
+    {
+      "name": "eigen3"
+    },
+    {
+      "name": "freetype"
+    }
+  ]
+}
