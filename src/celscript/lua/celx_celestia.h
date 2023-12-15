@@ -11,6 +11,8 @@
 
 #pragma once
 
+#include <celestia/celestiacore.h>
+
 struct lua_State;
 
 int celestia_new(lua_State*, CelestiaCore*);

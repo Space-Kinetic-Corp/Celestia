@@ -9,42 +9,60 @@
 
 #pragma once
 
+#include <Eigen/Core>
+#include <celutil/color.h>
 #include <cstdint>
 #include <string>
 #include <string_view>
 
-#include <Eigen/Core>
-
-#include <celutil/color.h>
-
 class Body;
-
 
 class Location
 {
 public:
-    const std::string& getName(bool i18n = false) const;
-    void setName(const std::string&);
+    const std::string &getName(bool i18n = false) const;
+    void               setName(const std::string &);
+
+    std::string getDisplayName(bool i18n = false) const;
+    void        setDisplayName(const std::string &label);
+    void        setLabelVisible(bool visible);
+    bool        getLabelVisible() const;
+
+    void setVisible(bool visible);
+    bool getVisible() const;
 
     Eigen::Vector3f getPosition() const;
-    void setPosition(const Eigen::Vector3f&);
+    void            setPosition(const Eigen::Vector3f &);
+    void            setPositionPlanetocentric(const Eigen::Vector3f &);
 
     float getSize() const;
-    void setSize(float);
+    void  setSize(float);
 
     float getImportance() const;
-    void setImportance(float);
+    void  setImportance(float);
 
-    const std::string& getInfoURL() const;
+    const std::string &getInfoURL() const;
 
-    bool isLabelColorOverridden() const { return overrideLabelColor; }
-    void setLabelColorOverridden(bool _override) { overrideLabelColor = _override; }
+    bool isLabelColorOverridden() const
+    {
+        return overrideLabelColor;
+    }
+    void setLabelColorOverridden(bool _override)
+    {
+        overrideLabelColor = _override;
+    }
 
-    Color getLabelColor() const { return labelColor; }
-    void setLabelColor(Color color) { labelColor = color; }
+    Color getLabelColor() const
+    {
+        return labelColor;
+    }
+    void setLabelColor(Color color)
+    {
+        labelColor = color;
+    }
 
-    void setParentBody(Body*);
-    Body* getParentBody() const;
+    void  setParentBody(Body *);
+    Body *getParentBody() const;
 
     Eigen::Vector3d getPlanetocentricPosition(double) const;
     Eigen::Vector3d getHeliocentricPosition(double) const;
@@ -52,9 +70,9 @@ public:
     enum FeatureType : std::uint64_t
     {
         // Custom locations, part I
-        City           = 0x0000000000000001,
-        Observatory    = 0x0000000000000002,
-        LandingSite    = 0x0000000000000004,
+        City        = 0x0000000000000001,
+        Observatory = 0x0000000000000002,
+        LandingSite = 0x0000000000000004,
         // Standard locations
         Crater         = 0x0000000000000008,
         Vallis         = 0x0000000000000010,
@@ -113,27 +131,31 @@ public:
         Virga          = 0x0200000000000000,
         Saxum          = 0x0400000000000000,
         // Custom locations, part II
-        Capital        = 0x0800000000000000,
-        Cosmodrome     = 0x1000000000000000,
-        Ring           = 0x2000000000000000,
-        Historical     = 0x4000000000000000,
-        Other          = 0x8000000000000000,
+        Capital    = 0x0800000000000000,
+        Cosmodrome = 0x1000000000000000,
+        Ring       = 0x2000000000000000,
+        Historical = 0x4000000000000000,
+        Other      = 0x8000000000000000,
     };
 
     static FeatureType parseFeatureType(std::string_view);
 
     FeatureType getFeatureType() const;
-    void setFeatureType(FeatureType);
+    void        setFeatureType(FeatureType);
 
- private:
-    Body* parent{ nullptr };
-    std::string name{};
-    std::string i18nName{};
-    Eigen::Vector3f position{ Eigen::Vector3f::Zero() };
-    float size{ 0.0f };
-    float importance{ -1.0f };
-    FeatureType featureType{ Other };
-    bool overrideLabelColor{ false };
-    Color labelColor{ 1.0f, 1.0f, 1.0f };
-    std::string infoURL{};
+private:
+    Body               *parent{ nullptr };
+    std::string         name{};
+    std::string         i18nName{};
+    Eigen::Vector3f     position{ Eigen::Vector3f::Zero() };
+    Eigen::Vector3f     positionPlanetocentric{};
+    float               size{ 0.0f };
+    float               importance{ -1.0f };
+    FeatureType         featureType{ Other };
+    bool                overrideLabelColor{ false };
+    Color               labelColor{ 1.0f, 1.0f, 1.0f };
+    std::string         infoURL{};
+    bool                isVisible;
+    bool                isLabelVisible;
+    mutable std::string labelText;
 };

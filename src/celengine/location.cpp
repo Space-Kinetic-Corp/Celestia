@@ -9,18 +9,15 @@
 
 #include "location.h"
 
-#include <cstddef>
-#include <cstring>
-
 #include <Eigen/Geometry>
-
 #include <celengine/body.h>
 #include <celutil/gettext.h>
+#include <cstddef>
+#include <cstring>
 
 // size_t and strncmp are used by the gperf output code
 using std::size_t;
 using std::strncmp;
-
 
 namespace
 {
@@ -30,23 +27,20 @@ namespace
 
 } // end unnamed namespace
 
-
-const std::string&
+const std::string &
 Location::getName(bool i18n) const
 {
     return i18n && !i18nName.empty() ? i18nName : name;
 }
 
-
 void
-Location::setName(const std::string& _name)
+Location::setName(const std::string &_name)
 {
-    name = _name;
+    name     = _name;
     i18nName = D_(_name.c_str());
     if (name == i18nName)
         i18nName = {};
 }
-
 
 Eigen::Vector3f
 Location::getPosition() const
@@ -54,13 +48,71 @@ Location::getPosition() const
     return position;
 }
 
-
 void
-Location::setPosition(const Eigen::Vector3f& _position)
+Location::setPosition(const Eigen::Vector3f &_position)
 {
     position = _position;
 }
 
+std::string
+Location::getDisplayName(bool i18n) const
+{
+    if (!labelText.empty())
+    {
+        return labelText;
+    }
+
+    // No label text, we generate one from the name
+    const std::string longName = getName(i18n);
+
+    // looking for the last |
+    std::string::const_reverse_iterator rit = std::find(longName.rbegin(), longName.rend(), '|');
+
+    // if a pipe was found, copy everything after it
+    if (rit != longName.rend())
+    {
+        std::string                 shortName;
+        std::string::const_iterator it = rit.base();
+        std::copy(it, longName.end(), std::back_inserter(shortName));
+
+        labelText = shortName;
+        return labelText;
+    }
+    else
+    {
+        return longName;
+    }
+}
+
+void
+Location::setDisplayName(const std::string &label)
+{
+    labelText = label;
+}
+
+void
+Location::setLabelVisible(bool visible)
+{
+    isLabelVisible = visible;
+}
+
+bool
+Location::getLabelVisible() const
+{
+    return isLabelVisible;
+}
+
+void
+Location::setVisible(bool visible)
+{
+    isVisible = visible;
+}
+
+bool
+Location::getVisible() const
+{
+    return isVisible;
+}
 
 float
 Location::getSize() const
@@ -68,13 +120,11 @@ Location::getSize() const
     return size;
 }
 
-
 void
 Location::setSize(float _size)
 {
     size = _size;
 }
-
 
 float
 Location::getImportance() const
@@ -82,20 +132,17 @@ Location::getImportance() const
     return importance;
 }
 
-
 void
 Location::setImportance(float _importance)
 {
     importance = _importance;
 }
 
-
-const std::string&
+const std::string &
 Location::getInfoURL() const
 {
     return infoURL;
 }
-
 
 Location::FeatureType
 Location::getFeatureType() const
@@ -103,37 +150,30 @@ Location::getFeatureType() const
     return featureType;
 }
 
-
 void
 Location::setFeatureType(Location::FeatureType _featureType) // cppcheck-suppress passedByValue
 {
     featureType = _featureType;
 }
 
-
 Location::FeatureType
 Location::parseFeatureType(std::string_view s)
 {
     auto ptr = FeatureNamesMap::getFeatureType(s.data(), s.size());
-    return ptr == nullptr
-        ? FeatureType::Other
-        : ptr->featureType;
+    return ptr == nullptr ? FeatureType::Other : ptr->featureType;
 }
 
-
-Body*
+Body *
 Location::getParentBody() const
 {
     return parent;
 }
 
-
 void
-Location::setParentBody(Body* _parent)
+Location::setParentBody(Body *_parent)
 {
     parent = _parent;
 }
-
 
 /*! Get the position of the location relative to its body in
  *  the J2000 ecliptic coordinate system.
@@ -148,7 +188,6 @@ Location::getPlanetocentricPosition(double t) const
     return q.conjugate() * position.cast<double>();
 }
 
-
 Eigen::Vector3d
 Location::getHeliocentricPosition(double t) const
 {
@@ -156,4 +195,9 @@ Location::getHeliocentricPosition(double t) const
         return position.cast<double>();
 
     return parent->getAstrocentricPosition(t) + getPlanetocentricPosition(t);
+}
+
+void Location::setPositionPlanetocentric(const Eigen::Vector3f& _position)
+{
+    positionPlanetocentric = _position;
 }

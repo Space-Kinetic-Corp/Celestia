@@ -89,6 +89,24 @@ private:
     float m_blue;
 };
 
+// For assimp loading
+class TextureResource
+{
+public:
+    virtual ~TextureResource() {};
+    virtual std::string source() const = 0;
+};
+
+class DefaultTextureResource : public TextureResource
+{
+public:
+    DefaultTextureResource(const std::string& source) : m_source(source) {};
+    std::string source() const { return m_source; }
+
+private:
+    std::string m_source;
+};
+
 
 enum class BlendMode : std::int16_t
 {

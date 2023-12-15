@@ -11,6 +11,9 @@
 
 #pragma once
 
+#include "celx_internal.h"
+#include "celengine/selection.h"
+
 struct lua_State;
 class Selection;
 

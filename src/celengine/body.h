@@ -9,25 +9,25 @@
 
 #pragma once
 
-#include <celengine/astroobj.h>
-#include <celengine/surface.h>
-#include <celengine/star.h>
-#include <celengine/location.h>
-#include <celengine/timeline.h>
-#include <celephem/rotation.h>
-#include <celephem/orbit.h>
-#include <celutil/ranges.h>
-#include <celutil/utf8.h>
 #include <Eigen/Core>
 #include <Eigen/Geometry>
+#include <celengine/astroobj.h>
+#include <celengine/location.h>
+#include <celengine/star.h>
+#include <celengine/surface.h>
+#include <celengine/timeline.h>
+#include <celephem/orbit.h>
+#include <celephem/rotation.h>
+#include <celutil/ranges.h>
+#include <celutil/utf8.h>
+#include <functional>
+#include <list>
+#include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
-#include <map>
-#include <memory>
-#include <list>
-#include <functional>
 
 class Selection;
 class ReferenceFrame;
@@ -38,84 +38,91 @@ class Atmosphere;
 
 class PlanetarySystem
 {
- public:
-    PlanetarySystem(Body* _primary);
-    PlanetarySystem(Star* _star);
+public:
+    PlanetarySystem(Body *_primary);
+    PlanetarySystem(Star *_star);
     ~PlanetarySystem() = default;
 
-    Star* getStar() const { return star; };
-    Body* getPrimaryBody() const { return primary; };
-    int getSystemSize() const { return satellites.size(); };
-    Body* getBody(int i) const { return satellites[i].get(); };
+    Star *getStar() const
+    {
+        return star;
+    };
+    Body *getPrimaryBody() const
+    {
+        return primary;
+    };
+    int getSystemSize() const
+    {
+        return satellites.size();
+    };
+    Body *getBody(int i) const
+    {
+        return satellites[i].get();
+    };
 
-    void addAlias(Body* body, const std::string& alias);
-    Body* addBody(const std::string& name);
-    void removeBody(const Body* body);
+    void  addAlias(Body *body, const std::string &alias);
+    Body *addBody(const std::string &name);
+    void  removeBody(const Body *body);
 
     enum TraversalResult
     {
-        ContinueTraversal   = 0,
-        StopTraversal       = 1
+        ContinueTraversal = 0,
+        StopTraversal     = 1
     };
 
-    Body* find(std::string_view, bool deepSearch = false, bool i18n = false) const;
-    void getCompletion(std::vector<std::string>& completion, std::string_view _name, bool rec = true) const;
+    Body *find(std::string_view, bool deepSearch = false, bool i18n = false) const;
+    void  getCompletion(
+         std::vector<std::string> &completion,
+         std::string_view          _name,
+         bool                      rec = true) const;
 
- private:
-    void addBodyToNameIndex(Body* body);
-    void removeBodyFromNameIndex(const Body* body);
+private:
+    void addBodyToNameIndex(Body *body);
+    void removeBodyFromNameIndex(const Body *body);
 
- private:
-    using ObjectIndex = std::map<std::string, Body*, UTF8StringOrderingPredicate>;
+private:
+    using ObjectIndex = std::map<std::string, Body *, UTF8StringOrderingPredicate>;
 
- private:
-    Star* star;
-    Body* primary{nullptr};
+private:
+    Star                              *star;
+    Body                              *primary{ nullptr };
     std::vector<std::unique_ptr<Body>> satellites;
-    ObjectIndex objectIndex;  // index of bodies by name
+    ObjectIndex                        objectIndex; // index of bodies by name
 };
-
 
 class RingRenderData
 {
- public:
-    RingRenderData() = default;
-    virtual ~RingRenderData() = default;
-    RingRenderData(const RingRenderData&) = delete;
-    RingRenderData(RingRenderData&&) = delete;
-    RingRenderData& operator=(const RingRenderData&) = delete;
-    RingRenderData& operator=(RingRenderData&&) = delete;
+public:
+    RingRenderData()                                  = default;
+    virtual ~RingRenderData()                         = default;
+    RingRenderData(const RingRenderData &)            = delete;
+    RingRenderData(RingRenderData &&)                 = delete;
+    RingRenderData &operator=(const RingRenderData &) = delete;
+    RingRenderData &operator=(RingRenderData &&)      = delete;
 };
-
 
 class RingSystem
 {
- public:
-    float innerRadius;
-    float outerRadius;
-    Color color;
-    MultiResTexture texture;
+public:
+    float                           innerRadius;
+    float                           outerRadius;
+    Color                           color;
+    MultiResTexture                 texture;
     std::unique_ptr<RingRenderData> renderData;
 
     RingSystem(float inner, float outer) :
-        innerRadius(inner), outerRadius(outer),
-        color(1.0f, 1.0f, 1.0f),
-        texture()
-        { };
+        innerRadius(inner), outerRadius(outer), color(1.0f, 1.0f, 1.0f), texture(){};
     RingSystem(float inner, float outer, Color _color, int _loTexture = -1, int _texture = -1) :
-        innerRadius(inner), outerRadius(outer), color(_color), texture(_loTexture, _texture)
-        { };
-    RingSystem(float inner, float outer, Color _color, const MultiResTexture& _texture) :
-        innerRadius(inner), outerRadius(outer), color(_color), texture(_texture)
-        { };
+        innerRadius(inner), outerRadius(outer), color(_color), texture(_loTexture, _texture){};
+    RingSystem(float inner, float outer, Color _color, const MultiResTexture &_texture) :
+        innerRadius(inner), outerRadius(outer), color(_color), texture(_texture){};
 };
-
 
 class Body
 {
- public:
-     Body(PlanetarySystem*, const std::string& name);
-     ~Body();
+public:
+    Body(PlanetarySystem *, const std::string &name);
+    ~Body();
 
     // Object class enumeration:
     // All of these values must be powers of two so that they can
@@ -164,20 +171,22 @@ class Body
     // instead of barycenter.
     enum
     {
-        Planet         =    0x01,
-        Moon           =    0x02,
-        Asteroid       =    0x04,
-        Comet          =    0x08,
-        Spacecraft     =    0x10,
-        Invisible      =    0x20,
-        Barycenter     =    0x40, // Not used (invisible is used instead)
-        SmallBody      =    0x80, // Not used
-        DwarfPlanet    =   0x100,
-        Stellar        =   0x200, // only used for orbit mask
-        SurfaceFeature =   0x400,
-        Component      =   0x800,
-        MinorMoon      =  0x1000,
-        Diffuse        =  0x2000,
+        Planet         = 0x01,
+        Moon           = 0x02,
+        Asteroid       = 0x04,
+        Comet          = 0x08,
+        Spacecraft     = 0x10,
+        Invisible      = 0x20,
+        Barycenter     = 0x40, // Not used (invisible is used instead)
+        SmallBody      = 0x80, // Not used
+        DwarfPlanet    = 0x100,
+        Stellar        = 0x200, // only used for orbit mask
+        SurfaceFeature = 0x400,
+        Component      = 0x800,
+        MinorMoon      = 0x1000,
+        Diffuse        = 0x2000,
+        Cluster        = 0x4000,
+        ClusterObject  = 0x8000,
         Unknown        = 0x10000,
     };
 
@@ -190,211 +199,305 @@ class Body
 
     void setDefaultProperties();
 
-    PlanetarySystem* getSystem() const;
-    const std::vector<std::string>& getNames() const;
-    std::string getName(bool i18n = false) const;
-    std::string getLocalizedName() const;
-    bool hasLocalizedName() const;
-    void addAlias(const std::string& alias);
+    PlanetarySystem                *getSystem() const;
+    const std::vector<std::string> &getNames() const;
+    std::string                     getName(bool i18n = false) const;
+    std::string                     getLocalizedName() const;
+    bool                            hasLocalizedName() const;
+    void                            addAlias(const std::string &alias);
 
-    void setTimeline(std::unique_ptr<Timeline>&& timeline);
-    const Timeline* getTimeline() const;
+    void            setTimeline(std::unique_ptr<Timeline> &&timeline);
+    const Timeline *getTimeline() const;
 
-    FrameTree* getFrameTree() const;
-    FrameTree* getOrCreateFrameTree();
+    FrameTree *getFrameTree() const;
+    FrameTree *getOrCreateFrameTree();
 
-    const ReferenceFrame::SharedConstPtr& getOrbitFrame(double tdb) const;
-    const celestia::ephem::Orbit* getOrbit(double tdb) const;
-    const ReferenceFrame::SharedConstPtr& getBodyFrame(double tdb) const;
-    const celestia::ephem::RotationModel* getRotationModel(double tdb) const;
+    const ReferenceFrame::SharedConstPtr &getOrbitFrame(double tdb) const;
+    const celestia::ephem::Orbit         *getOrbit(double tdb) const;
+    const ReferenceFrame::SharedConstPtr &getBodyFrame(double tdb) const;
+    const celestia::ephem::RotationModel *getRotationModel(double tdb) const;
 
     // Size methods
-    void setSemiAxes(const Eigen::Vector3f&);
+    void            setSemiAxes(const Eigen::Vector3f &);
     Eigen::Vector3f getSemiAxes() const;
-    float getRadius() const;
+    float           getRadius() const;
+
+    void setMagCoeff(float);
 
     bool isSphere() const;
     bool isEllipsoid() const;
 
     float getMass() const;
-    void setMass(float);
+    void  setMass(float);
     float getDensity() const;
-    void setDensity(float);
+    void  setDensity(float);
 
     // Albedo functions and temperature
     float getGeomAlbedo() const;
-    void setGeomAlbedo(float);
+    void  setGeomAlbedo(float);
     float getBondAlbedo() const;
-    void setBondAlbedo(float);
+    void  setBondAlbedo(float);
     float getReflectivity() const;
-    void setReflectivity(float);
+    void  setReflectivity(float);
     float getTemperature(double t = 0) const;
-    void setTemperature(float);
+    void  setTemperature(float);
     float getTempDiscrepancy() const;
-    void setTempDiscrepancy(float);
+    void  setTempDiscrepancy(float);
 
-    int getClassification() const;
-    void setClassification(int);
-    const std::string& getInfoURL() const;
-    void setInfoURL(const std::string&);
+    int                getClassification() const;
+    void               setClassification(int);
+    const std::string &getInfoURL() const;
+    void               setInfoURL(const std::string &);
 
-    PlanetarySystem* getSatellites() const;
-    PlanetarySystem* getOrCreateSatellites();
+    PlanetarySystem *getSatellites();
+    void             setSatellites(std::unique_ptr<PlanetarySystem> &&);
+    PlanetarySystem *getOrCreateSatellites();
 
     float getBoundingRadius() const;
     float getCullingRadius() const;
 
-    RingSystem* getRings() const;
-    void setRings(std::unique_ptr<RingSystem>&&);
-    void scaleRings(float);
+    RingSystem *getRings() const;
+    void        setRings(std::unique_ptr<RingSystem> &&);
+    void        scaleRings(float);
 
-    const Atmosphere* getAtmosphere() const;
-    Atmosphere* getAtmosphere();
-    void setAtmosphere(std::unique_ptr<Atmosphere>&&);
+    const Atmosphere *getAtmosphere() const;
+    Atmosphere       *getAtmosphere();
+    void              setAtmosphere(std::unique_ptr<Atmosphere> &&);
 
-    ResourceHandle getGeometry() const { return geometry; }
-    void setGeometry(ResourceHandle);
+    ResourceHandle getGeometry() const
+    {
+        return geometry;
+    }
+    void               setGeometry(ResourceHandle);
     Eigen::Quaternionf getGeometryOrientation() const;
-    void setGeometryOrientation(const Eigen::Quaternionf& orientation);
-    float getGeometryScale() const { return geometryScale; }
+    void               setGeometryOrientation(const Eigen::Quaternionf &orientation);
+    float              getGeometryScale() const
+    {
+        return geometryScale;
+    }
     void setGeometryScale(float scale);
 
-    void setSurface(const Surface&);
-    const Surface& getSurface() const;
-    Surface& getSurface();
+    void           setSurface(const Surface &);
+    const Surface &getSurface() const;
+    Surface       &getSurface();
 
-    float getLuminosity(const Star& sun,
-                        float distanceFromSun) const;
-    float getLuminosity(float sunLuminosity,
-                        float distanceFromSun) const;
+    float getLuminosity(const Star &sun, float distanceFromSun) const;
+    float getLuminosity(float sunLuminosity, float distanceFromSun) const;
 
-    float getApparentMagnitude(const Star& sun,
-                               float distanceFromSun,
-                               float distanceFromViewer) const;
-    float getApparentMagnitude(float sunLuminosity,
-                               float distanceFromSun,
-                               float distanceFromViewer) const;
-    float getApparentMagnitude(const Star& sun,
-                               const Eigen::Vector3d& sunPosition,
-                               const Eigen::Vector3d& viewerPosition) const;
-    float getApparentMagnitude(float sunLuminosity,
-                               const Eigen::Vector3d& sunPosition,
-                               const Eigen::Vector3d& viewerPosition) const;
+    float
+    getApparentMagnitude(const Star &sun, float distanceFromSun, float distanceFromViewer) const;
+    float getApparentMagnitude(float sunLuminosity, float distanceFromSun, float distanceFromViewer)
+        const;
+    float getApparentMagnitude(
+        const Star            &sun,
+        const Eigen::Vector3d &sunPosition,
+        const Eigen::Vector3d &viewerPosition) const;
+    float getApparentMagnitude(
+        float                  sunLuminosity,
+        const Eigen::Vector3d &sunPosition,
+        const Eigen::Vector3d &viewerPosition) const;
 
-    UniversalCoord getPosition(double tdb) const;
+    UniversalCoord     getPosition(double tdb) const;
     Eigen::Quaterniond getOrientation(double tdb) const;
-    Eigen::Vector3d getVelocity(double tdb) const;
-    Eigen::Vector3d getAngularVelocity(double tdb) const;
+    Eigen::Vector3d    getVelocity(double tdb) const;
+    Eigen::Vector3d    getAngularVelocity(double tdb) const;
 
-    Eigen::Matrix4d getLocalToAstrocentric(double) const;
-    Eigen::Vector3d getAstrocentricPosition(double) const;
+    Eigen::Matrix4d    getLocalToAstrocentric(double) const;
+    Eigen::Vector3d    getAstrocentricPosition(double) const;
     Eigen::Quaterniond getEquatorialToBodyFixed(double) const;
     Eigen::Quaterniond getEclipticToFrame(double) const;
     Eigen::Quaterniond getEclipticToEquatorial(double) const;
     Eigen::Quaterniond getEclipticToBodyFixed(double) const;
-    Eigen::Matrix4d getBodyFixedToAstrocentric(double) const;
+    Eigen::Matrix4d    getBodyFixedToAstrocentric(double) const;
+    // VTS
+    Eigen::Quaterniond getOrientationCorrection3(double tdb = 0) const;
 
     Eigen::Vector3d planetocentricToCartesian(double lon, double lat, double alt) const;
-    Eigen::Vector3d planetocentricToCartesian(const Eigen::Vector3d& lonLatAlt) const;
-    Eigen::Vector3d cartesianToPlanetocentric(const Eigen::Vector3d& v) const;
+    Eigen::Vector3d planetocentricToCartesian(const Eigen::Vector3d &lonLatAlt) const;
+    Eigen::Vector3d cartesianToPlanetocentric(const Eigen::Vector3d &v) const;
 
     Eigen::Vector3d geodeticToCartesian(double lon, double lat, double alt) const;
-    Eigen::Vector3d geodeticToCartesian(const Eigen::Vector3d& lonLatAlt) const;
+    Eigen::Vector3d geodeticToCartesian(const Eigen::Vector3d &lonLatAlt) const;
 
-    Eigen::Vector3d eclipticToPlanetocentric(const Eigen::Vector3d& ecl, double tdb) const;
+    Eigen::Vector3d eclipticToPlanetocentric(const Eigen::Vector3d &ecl, double tdb) const;
 
     bool extant(double) const;
-    void getLifespan(double&, double&) const;
+    void getLifespan(double &, double &) const;
 
-    Surface* getAlternateSurface(const std::string&) const;
-    void addAlternateSurface(const std::string&, std::unique_ptr<Surface>&&);
-    auto getAlternateSurfaceNames() const
+    Surface *getAlternateSurface(const std::string &) const;
+    void     addAlternateSurface(const std::string &, std::unique_ptr<Surface> &&);
+    auto     getAlternateSurfaceNames() const
     {
         using range_type = decltype(celestia::util::keysView(*altSurfaces));
-        return altSurfaces
-            ? std::make_optional(celestia::util::keysView(*altSurfaces))
-            : std::optional<range_type>();
+        return altSurfaces ? std::make_optional(celestia::util::keysView(*altSurfaces)) :
+                             std::optional<range_type>();
     }
 
-    bool hasLocations() const { return locations != nullptr && !locations->empty(); }
+    bool hasLocations() const
+    {
+        return locations != nullptr && !locations->empty();
+    }
 
     auto getLocations()
     {
         using range_type = decltype(celestia::util::pointerView(*locations));
-        return locations
-            ? std::make_optional(celestia::util::pointerView(*locations))
-            : std::optional<range_type>();
+        return locations ? std::make_optional(celestia::util::pointerView(*locations)) :
+                           std::optional<range_type>();
     }
 
     auto getLocations() const
     {
         using range_type = decltype(celestia::util::constPointerView(*locations));
-        return locations
-            ? std::make_optional(celestia::util::constPointerView(*locations))
-            : std::optional<range_type>();
+        return locations ? std::make_optional(celestia::util::constPointerView(*locations)) :
+                           std::optional<range_type>();
     }
 
-    void addLocation(std::unique_ptr<Location>&&);
-    Location* findLocation(std::string_view, bool i18n = false) const;
-    void computeLocations();
+    void      addLocation(std::unique_ptr<Location> &&);
+    Location *findLocation(std::string_view, bool i18n = false) const;
+    void      computeLocations();
 
-    bool isVisible() const { return visible; }
+    double getPlotWidth() const
+    {
+        return plotWidth;
+    }
+    void setPlotWidth(double _width)
+    {
+        plotWidth = _width;
+    }
+    uint16_t getPlotPattern() const
+    {
+        return plotPattern;
+    }
+    void setPlotPattern(uint16_t _pattern)
+    {
+        plotPattern = _pattern;
+    }
+    double getPlotDuration() const
+    {
+        return plotDuration;
+    }
+    void setPlotDuration(double _duration)
+    {
+        plotDuration = _duration;
+    }
+    double getPlotLead() const
+    {
+        return plotLead;
+    }
+    void setPlotLead(double _lead)
+    {
+        plotLead = _lead;
+    }
+    float getPlotFade() const
+    {
+        return plotFade;
+    }
+    void setPlotFade(double _fade)
+    {
+        plotFade = _fade;
+    }
+
+    bool isVisible() const
+    {
+        return visible;
+    }
     void setVisible(bool _visible);
-    bool isClickable() const { return clickable; }
+    bool isClickable() const
+    {
+        return clickable;
+    }
     void setClickable(bool _clickable);
-    bool isVisibleAsPoint() const { return visibleAsPoint; }
+    bool isVisibleAsPoint() const
+    {
+        return visibleAsPoint;
+    }
     void setVisibleAsPoint(bool _visibleAsPoint);
-    bool isOrbitColorOverridden() const { return overrideOrbitColor; }
+    bool isOrbitColorOverridden() const
+    {
+        return overrideOrbitColor;
+    }
     void setOrbitColorOverridden(bool _override);
-    bool isSecondaryIlluminator() const { return secondaryIlluminator; }
+    bool isSecondaryIlluminator() const
+    {
+        return secondaryIlluminator;
+    }
     void setSecondaryIlluminator(bool enable);
+    // VTS //
+    bool isLabelVisible() const
+    {
+        return labelvisible == 1;
+    }
+    void setLabelVisible(bool _visible);
+    void setHierarchyVisible(bool _visible);
 
-    bool hasVisibleGeometry() const { return classification != Invisible && visible; }
+    bool hasVisibleGeometry() const
+    {
+        return classification != Invisible && visible;
+    }
 
-    VisibilityPolicy getOrbitVisibility() const { return orbitVisibility; }
+    VisibilityPolicy getOrbitVisibility() const
+    {
+        return orbitVisibility;
+    }
     void setOrbitVisibility(VisibilityPolicy _orbitVisibility);
 
-    Color getOrbitColor() const { return orbitColor; }
-    void setOrbitColor(const Color&);
+    Color getOrbitColor() const
+    {
+        return orbitColor;
+    }
+    void setOrbitColor(const Color &);
 
-    Color getCometTailColor() const { return cometTailColor; }
-    void setCometTailColor(const Color& c);
+    Color getCometTailColor() const
+    {
+        return cometTailColor;
+    }
+    void setCometTailColor(const Color &c);
 
     int getOrbitClassification() const;
 
     enum
     {
-        BodyAxes       =   0x01,
-        FrameAxes      =   0x02,
-        LongLatGrid    =   0x04,
-        SunDirection   =   0x08,
-        VelocityVector =   0x10,
+        BodyAxes       = 0x01,
+        FrameAxes      = 0x02,
+        LongLatGrid    = 0x04,
+        SunDirection   = 0x08,
+        VelocityVector = 0x10,
     };
 
-    void addReferenceMark(std::unique_ptr<ReferenceMark>&& refMark);
-    void removeReferenceMark(const std::string& tag);
-    const ReferenceMark* findReferenceMark(const std::string& tag) const;
+    void                 addReferenceMark(std::unique_ptr<ReferenceMark> &&refMark);
+    void                 removeReferenceMark(const std::string &tag);
+    const ReferenceMark *findReferenceMark(const std::string &tag) const;
+    // CJP Add VTS
+    ReferenceMark *findReferenceMarkMut(const std::string &tag) const;
+    auto           getReferenceMarksMut()
+    {
+        using range_type = decltype(celestia::util::pointerView(*referenceMarks));
+        return referenceMarks ? std::make_optional(celestia::util::pointerView(*referenceMarks)) :
+                                std::optional<range_type>();
+    }
     auto getReferenceMarks() const
     {
         using range_type = decltype(celestia::util::constPointerView(*referenceMarks));
-        return referenceMarks
-            ? std::make_optional(celestia::util::constPointerView(*referenceMarks))
-            : std::optional<range_type>();
+        return referenceMarks ?
+                   std::make_optional(celestia::util::constPointerView(*referenceMarks)) :
+                   std::optional<range_type>();
     }
 
-    void markChanged();
-    void markUpdated();
-    void recomputeCullingRadius();
+    void  markChanged();
+    void  markUpdated();
+    float getMinPixelSize() const;
+    void  setMinPixelSize(float value);
+    void  recomputeCullingRadius();
 
- private:
-    void setName(const std::string& name);
+private:
+    void setName(const std::string &name);
 
- private:
+private:
     std::vector<std::string> names{ 1 };
-    std::string localizedName;
+    std::string              localizedName;
 
     // Parent in the name hierarchy
-    PlanetarySystem* system;
+    PlanetarySystem *system;
     // Children in the name hierarchy
     std::unique_ptr<PlanetarySystem> satellites;
 
@@ -402,23 +505,24 @@ class Body
     // Children in the frame hierarchy
     std::unique_ptr<FrameTree> frameTree;
 
-    float radius{ 1.0f };
+    float           minPixelSize;
+    float           radius{ 1.0f };
     Eigen::Vector3f semiAxes{ Eigen::Vector3f::Ones() };
-    float mass{ 0.0f };
-    float density{ 0.0f };
-    float geomAlbedo{ 0.5f };
-    float bondAlbedo{ 0.5f };
-    float reflectivity{ 0.5f };
-    float temperature{ 0.0f };
-    float tempDiscrepancy{ 0.0f };
+    float           mass{ 0.0f };
+    float           density{ 0.0f };
+    float           geomAlbedo{ 0.5f };
+    float           bondAlbedo{ 0.5f };
+    float           reflectivity{ 0.5f };
+    float           temperature{ 0.0f };
+    float           tempDiscrepancy{ 0.0f };
 
     Eigen::Quaternionf geometryOrientation{ Eigen::Quaternionf::Identity() };
 
     float cullingRadius{ 0.0f };
 
     ResourceHandle geometry{ InvalidResource };
-    float geometryScale{ 1.0f };
-    Surface surface{ Color(1.0f, 1.0f, 1.0f) };
+    float          geometryScale{ 1.0f };
+    Surface        surface{ Color(1.0f, 1.0f, 1.0f) };
 
     std::unique_ptr<Atmosphere> atmosphere;
     std::unique_ptr<RingSystem> rings;
@@ -431,18 +535,26 @@ class Body
     std::unique_ptr<AltSurfaceTable> altSurfaces;
 
     std::unique_ptr<std::vector<std::unique_ptr<Location>>> locations;
-    mutable bool locationsComputed{ false };
+    mutable bool                                            locationsComputed{ false };
 
     std::unique_ptr<std::list<std::unique_ptr<ReferenceMark>>> referenceMarks;
 
-    Color orbitColor;
-    Color cometTailColor{ 0.5f, 0.5f, 0.75f };
+    Color    orbitColor;
+    double   plotWidth;
+    uint16_t plotPattern;
+    double   plotDuration;
+    double   plotLead;
+    float    plotFade;
+    Color    cometTailColor{ 0.5f, 0.5f, 0.75f };
 
-    bool visible{ true };
-    bool clickable{ true };
-    bool visibleAsPoint{ true };
-    bool overrideOrbitColor{ false };
+    bool             visible{ true };
+    bool             clickable{ true };
+    bool             visibleAsPoint{ true };
+    bool             overrideOrbitColor{ false };
     VisibilityPolicy orbitVisibility : 3;
-    bool secondaryIlluminator{ true };
-    bool primaryNameLocalized { false };
+    bool             secondaryIlluminator{ true };
+    bool             primaryNameLocalized{ false };
+    // VTS //
+    unsigned int labelvisible : 1;
+    unsigned int hierarchyvisible : 1;
 };

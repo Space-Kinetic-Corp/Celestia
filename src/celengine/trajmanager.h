@@ -42,6 +42,7 @@ class TrajectoryInfo
 
  private:
     std::string source;
+    std::string colorSource;
     fs::path path;
     celestia::ephem::TrajectoryInterpolation interpolation;
     celestia::ephem::TrajectoryPrecision precision;
@@ -52,10 +53,11 @@ class TrajectoryInfo
     using ResourceType = celestia::ephem::Orbit;
 
     TrajectoryInfo(const std::string& _source,
+                     const std::string& _colorSource = "",
                    const fs::path& _path = "",
                    celestia::ephem::TrajectoryInterpolation _interpolation = celestia::ephem::TrajectoryInterpolation::Cubic,
                    celestia::ephem::TrajectoryPrecision _precision = celestia::ephem::TrajectoryPrecision::Single) :
-        source(_source), path(_path), interpolation(_interpolation), precision(_precision) {}
+        source(_source), colorSource(_colorSource), path(_path), interpolation(_interpolation), precision(_precision) {}
 
     ResourceKey resolve(const fs::path&) const;
     std::unique_ptr<celestia::ephem::Orbit> load(const ResourceKey&) const;

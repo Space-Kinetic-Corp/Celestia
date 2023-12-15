@@ -16,6 +16,14 @@
 #include <vector>
 #include "timelinephase.h"
 
+class ReferenceFrame;
+class TimelinePhase;
+
+namespace celestia::ephem
+{
+class Orbit;
+class RotationModel;
+}
 class Timeline
 {
 public:
@@ -32,6 +40,9 @@ public:
     bool includes(double t) const;
 
     void markChanged();
+
+    // VTS //
+    void setMagCoeff(float coeff);
 
 private:
     std::vector<TimelinePhase::SharedConstPtr> phases;

@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include <celassimp/AssimpLoader.h>
 #include <cel3ds/3dsmodel.h>
 #include <cel3ds/3dsread.h>
 #include <celmodel/model.h>
@@ -35,6 +36,7 @@
 
 using celestia::util::GetLogger;
 
+bool GeometryInfo::isAssimpFor3dsEnabled = false;
 namespace
 {
 

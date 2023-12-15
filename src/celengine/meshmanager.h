@@ -46,12 +46,21 @@ class GeometryInfo
         {}
     };
 
+    // VTS
+    Geometry* resource{ nullptr};
+    ResourceState state{ ResourceState::NotLoaded };
+
+    static bool isAssimpFor3dsEnabled;
+
  private:
     fs::path source;
     fs::path path;
     Eigen::Vector3f center;
     float scale;
     bool isNormalized;
+
+    // VTS
+
 
     friend bool operator<(const GeometryInfo&, const GeometryInfo&);
 

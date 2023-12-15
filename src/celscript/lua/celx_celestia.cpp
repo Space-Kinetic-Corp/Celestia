@@ -9,34 +9,36 @@
 // as published by the Free Software Foundation; either version 2
 // of the License, or (at your option) any later version.
 
-#include <iostream>
-#include <optional>
+#include "celx_celestia.h"
 
-#include <fmt/format.h>
+#include "celx.h"
+#include "celx_category.h"
+#include "celx_frame.h"
+#include "celx_internal.h"
+#include "celx_misc.h"
+#include "celx_object.h"
+#include "celx_observer.h"
+#include "celx_position.h"
+#include "celx_rotation.h"
+#include "celx_vector.h"
 
 #include <celcompat/filesystem.h>
 #include <celengine/category.h>
+#include <celengine/footprint.h>
+#include <celengine/sensorgeometry.h>
 #include <celengine/texture.h>
 #include <celestia/audiosession.h>
-#include <celestia/url.h>
 #include <celestia/celestiacore.h>
+#include <celestia/url.h>
 #include <celestia/view.h>
 #include <celscript/common/scriptmaps.h>
 #include <celttf/truetypefont.h>
 #include <celutil/gettext.h>
 #include <celutil/logger.h>
 #include <celutil/stringutils.h>
-#include "celx.h"
-#include "celx_internal.h"
-#include "celx_celestia.h"
-#include "celx_frame.h"
-#include "celx_misc.h"
-#include "celx_observer.h"
-#include "celx_object.h"
-#include "celx_position.h"
-#include "celx_rotation.h"
-#include "celx_vector.h"
-#include "celx_category.h"
+#include <fmt/format.h>
+#include <iostream>
+#include <optional>
 
 using namespace std;
 using namespace Eigen;
@@ -44,54 +46,71 @@ using namespace celestia;
 using namespace celestia::scripts;
 using celestia::util::GetLogger;
 
+extern const char *KbdCallback;
+extern const char *CleanupCallback;
 
-extern const char* KbdCallback;
-extern const char* CleanupCallback;
+extern const char *EventHandlers;
 
-extern const char* EventHandlers;
+extern const char *KeyHandler;
+extern const char *TickHandler;
+extern const char *MouseDownHandler;
+extern const char *MouseUpHandler;
 
-extern const char* KeyHandler;
-extern const char* TickHandler;
-extern const char* MouseDownHandler;
-extern const char* MouseUpHandler;
+// #ifdef _WIN32
+//  #ifdef _WIN32
+#include <windows.h>
+// extern
+HWND mainWindow;
+// extern
+HMENU menuBar;
+// extern
+bool hideMenuBar;
+// #else
+// #include <QMenuBar>
+// #include <QWidget>
+// #endif
 
-LuaState *getLuaStateObject(lua_State*);
+LuaState *getLuaStateObject(lua_State *);
 
-void PushClass(lua_State*, int);
-void setTable(lua_State*, const char*, lua_Number);
-ObserverFrame::CoordinateSystem parseCoordSys(const string&);
+void                            PushClass(lua_State *, int);
+void                            setTable(lua_State *, const char *, lua_Number);
+ObserverFrame::CoordinateSystem parseCoordSys(const string &);
 
-static fs::path GetScriptPath(lua_State* l)
+static fs::path
+GetScriptPath(lua_State *l)
 {
     lua_Debug ar;
     lua_getstack(l, 1, &ar);
     lua_getinfo(l, "S", &ar);
-    auto* base_dir = ar.source; // Lua file from which we are called
+    auto *base_dir = ar.source; // Lua file from which we are called
     if (base_dir[0] == '@')
         base_dir++;
     return fs::path(base_dir).parent_path();
 }
 
 // ==================== Celestia-object ====================
-int celestia_new(lua_State* l, CelestiaCore* appCore)
+int
+celestia_new(lua_State *l, CelestiaCore *appCore)
 {
-    CelestiaCore** ud = static_cast<CelestiaCore**>(lua_newuserdata(l, sizeof(CelestiaCore*)));
-    *ud = appCore;
+    CelestiaCore **ud = static_cast<CelestiaCore **>(lua_newuserdata(l, sizeof(CelestiaCore *)));
+    *ud               = appCore;
 
     Celx_SetClass(l, Celx_Celestia);
 
     return 1;
 }
 
-CelestiaCore* to_celestia(lua_State* l, int index)
+CelestiaCore *
+to_celestia(lua_State *l, int index)
 {
-    auto** appCore = static_cast<CelestiaCore**>(Celx_CheckUserData(l, index, Celx_Celestia));
+    auto **appCore = static_cast<CelestiaCore **>(Celx_CheckUserData(l, index, Celx_Celestia));
     return appCore ? *appCore : nullptr;
 }
 
-CelestiaCore* this_celestia(lua_State* l)
+CelestiaCore *
+this_celestia(lua_State *l)
 {
-    CelestiaCore* appCore = to_celestia(l, 1);
+    CelestiaCore *appCore = to_celestia(l, 1);
     if (appCore == nullptr)
     {
         Celx_DoError(l, "Bad celestia object!");
@@ -100,14 +119,20 @@ CelestiaCore* this_celestia(lua_State* l)
     return appCore;
 }
 
-
-static int celestia_flash(lua_State* l)
+static int
+celestia_flash(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 3, "One or two arguments expected to function celestia:flash");
 
-    CelestiaCore* appCore = this_celestia(l);
-    const char* s = Celx_SafeGetString(l, 2, AllErrors, "First argument to celestia:flash must be a string");
-    double duration = Celx_SafeGetNumber(l, 3, WrongType, "Second argument to celestia:flash must be a number", 1.5);
+    CelestiaCore *appCore = this_celestia(l);
+    const char   *s
+        = Celx_SafeGetString(l, 2, AllErrors, "First argument to celestia:flash must be a string");
+    double duration = Celx_SafeGetNumber(
+        l,
+        3,
+        WrongType,
+        "Second argument to celestia:flash must be a number",
+        1.5);
     if (duration < 0.0)
         duration = 1.5;
 
@@ -116,17 +141,44 @@ static int celestia_flash(lua_State* l)
     return 0;
 }
 
-static int celestia_print(lua_State* l)
+static int
+celestia_print(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 7, "One to six arguments expected to function celestia:print");
 
-    CelestiaCore* appCore = this_celestia(l);
-    const char* s = Celx_SafeGetString(l, 2, AllErrors, "First argument to celestia:print must be a string");
-    double duration = Celx_SafeGetNumber(l, 3, WrongType, "Second argument to celestia:print must be a number", 1.5);
-    int horig = (int)Celx_SafeGetNumber(l, 4, WrongType, "Third argument to celestia:print must be a number", -1.0);
-    int vorig = (int)Celx_SafeGetNumber(l, 5, WrongType, "Fourth argument to celestia:print must be a number", -1.0);
-    int hoff = (int)Celx_SafeGetNumber(l, 6, WrongType, "Fifth argument to celestia:print must be a number", 0.0);
-    int voff = (int)Celx_SafeGetNumber(l, 7, WrongType, "Sixth argument to celestia:print must be a number", 5.0);
+    CelestiaCore *appCore = this_celestia(l);
+    const char   *s
+        = Celx_SafeGetString(l, 2, AllErrors, "First argument to celestia:print must be a string");
+    double duration = Celx_SafeGetNumber(
+        l,
+        3,
+        WrongType,
+        "Second argument to celestia:print must be a number",
+        1.5);
+    int horig = (int)Celx_SafeGetNumber(
+        l,
+        4,
+        WrongType,
+        "Third argument to celestia:print must be a number",
+        -1.0);
+    int vorig = (int)Celx_SafeGetNumber(
+        l,
+        5,
+        WrongType,
+        "Fourth argument to celestia:print must be a number",
+        -1.0);
+    int hoff = (int)Celx_SafeGetNumber(
+        l,
+        6,
+        WrongType,
+        "Fifth argument to celestia:print must be a number",
+        0.0);
+    int voff = (int)Celx_SafeGetNumber(
+        l,
+        7,
+        WrongType,
+        "Sixth argument to celestia:print must be a number",
+        5.0);
 
     if (duration < 0.0)
         duration = 1.5;
@@ -136,15 +188,32 @@ static int celestia_print(lua_State* l)
     return 0;
 }
 
-static int celestia_printatpixel(lua_State* l)
+static int
+celestia_printatpixel(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 5, "One to four arguments expected to function celestia:printatpixel");
 
-    CelestiaCore* appCore = this_celestia(l);
-    const char* s = Celx_SafeGetString(l, 2, AllErrors, "First argument to celestia:print must be a string");
-    double duration = Celx_SafeGetNumber(l, 3, WrongType, "Second argument to celestia:print must be a number", 1.5);
-    int x = (int)Celx_SafeGetNumber(l, 4, WrongType, "Third argument to celestia:print must be a number", 0.0);
-    int y = (int)Celx_SafeGetNumber(l, 5, WrongType, "Fourth argument to celestia:print must be a number", 0.0);
+    CelestiaCore *appCore = this_celestia(l);
+    const char   *s
+        = Celx_SafeGetString(l, 2, AllErrors, "First argument to celestia:print must be a string");
+    double duration = Celx_SafeGetNumber(
+        l,
+        3,
+        WrongType,
+        "Second argument to celestia:print must be a number",
+        1.5);
+    int x = (int)Celx_SafeGetNumber(
+        l,
+        4,
+        WrongType,
+        "Third argument to celestia:print must be a number",
+        0.0);
+    int y = (int)Celx_SafeGetNumber(
+        l,
+        5,
+        WrongType,
+        "Fourth argument to celestia:print must be a number",
+        0.0);
 
     if (duration < 0.0)
         duration = 1.5;
@@ -154,51 +223,61 @@ static int celestia_printatpixel(lua_State* l)
     return 0;
 }
 
-static int celestia_gettextwidth(lua_State* l)
+static int
+celestia_gettextwidth(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected to function celestia:gettextwidth");
 
-    CelestiaCore* appCore = this_celestia(l);
-    const char* s = Celx_SafeGetString(l, 2, AllErrors, "First argument to celestia:gettextwidth must be a string");
+    CelestiaCore *appCore = this_celestia(l);
+    const char   *s       = Celx_SafeGetString(
+        l,
+        2,
+        AllErrors,
+        "First argument to celestia:gettextwidth must be a string");
 
     lua_pushnumber(l, appCore->getTextWidth(s));
 
     return 1;
 }
 
-static int celestia_getscreendpi(lua_State* l)
+static int
+celestia_getscreendpi(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected for celestia:getscreendp()");
 
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     lua_pushnumber(l, appCore->getScreenDpi());
 
     return 1;
 }
 
-static int celestia_setscreendpi(lua_State* l)
+static int
+celestia_setscreendpi(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected for celestia:setscreendpi()");
-    int screenDpi = (int)Celx_SafeGetNumber(l, 2, AllErrors, "Argument to celestia:setscreendpi() must be a number");
+    int screenDpi = (int)
+        Celx_SafeGetNumber(l, 2, AllErrors, "Argument to celestia:setscreendpi() must be a number");
     screenDpi = max(screenDpi, 1);
 
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     appCore->setScreenDpi(screenDpi);
 
     return 0;
 }
 
-static int celestia_getaltazimuthmode(lua_State* l)
+static int
+celestia_getaltazimuthmode(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected for celestia:getaltazimuthmode()");
 
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     lua_pushboolean(l, appCore->getAltAzimuthMode());
 
     return 1;
 }
 
-static int celestia_setaltazimuthmode(lua_State* l)
+static int
+celestia_setaltazimuthmode(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected to function celestia:setaltazimuthmode");
     bool enable = false;
@@ -208,66 +287,71 @@ static int celestia_setaltazimuthmode(lua_State* l)
         return 0;
     }
 
-    enable = lua_toboolean(l, -1) != 0;
-    CelestiaCore* appCore = this_celestia(l);
+    enable                = lua_toboolean(l, -1) != 0;
+    CelestiaCore *appCore = this_celestia(l);
     appCore->setAltAzimuthMode(enable);
     lua_pop(l, 1);
 
     return 0;
 }
 
-static int celestia_show(lua_State* l)
+static int
+celestia_show(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1000, "Wrong number of arguments to celestia:show");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    int argc = lua_gettop(l);
-    uint64_t flags = 0;
-    auto &RenderFlagMap = appCore->scriptMaps()->RenderFlagMap;
+    int      argc          = lua_gettop(l);
+    uint64_t flags         = 0;
+    auto    &RenderFlagMap = appCore->scriptMaps()->RenderFlagMap;
     for (int i = 2; i <= argc; i++)
     {
-        string renderFlag = Celx_SafeGetString(l, i, AllErrors, "Arguments to celestia:show() must be strings");
+        string renderFlag
+            = Celx_SafeGetString(l, i, AllErrors, "Arguments to celestia:show() must be strings");
         if (renderFlag == "lightdelay")
             appCore->setLightDelayActive(true);
         else if (RenderFlagMap.count(renderFlag) > 0)
             flags |= RenderFlagMap[renderFlag];
     }
 
-    Renderer* r = appCore->getRenderer();
+    Renderer *r = appCore->getRenderer();
     r->setRenderFlags(r->getRenderFlags() | flags);
     appCore->notifyWatchers(CelestiaCore::RenderFlagsChanged);
 
     return 0;
 }
 
-static int celestia_hide(lua_State* l)
+static int
+celestia_hide(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1000, "Wrong number of arguments to celestia:hide");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    int argc = lua_gettop(l);
-    uint64_t flags = 0;
-    auto &RenderFlagMap = appCore->scriptMaps()->RenderFlagMap;
+    int      argc          = lua_gettop(l);
+    uint64_t flags         = 0;
+    auto    &RenderFlagMap = appCore->scriptMaps()->RenderFlagMap;
     for (int i = 2; i <= argc; i++)
     {
-        string renderFlag = Celx_SafeGetString(l, i, AllErrors, "Arguments to celestia:hide() must be strings");
+        string renderFlag
+            = Celx_SafeGetString(l, i, AllErrors, "Arguments to celestia:hide() must be strings");
         if (renderFlag == "lightdelay")
             appCore->setLightDelayActive(false);
         else if (RenderFlagMap.count(renderFlag) > 0)
             flags |= RenderFlagMap[renderFlag];
     }
 
-    Renderer* r = appCore->getRenderer();
+    Renderer *r = appCore->getRenderer();
     r->setRenderFlags(r->getRenderFlags() & ~flags);
     appCore->notifyWatchers(CelestiaCore::RenderFlagsChanged);
 
     return 0;
 }
 
-static int celestia_setrenderflags(lua_State* l)
+static int
+celestia_setrenderflags(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected for celestia:setrenderflags()");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     if (!lua_istable(l, 2))
     {
         Celx_DoError(l, "Argument to celestia:setrenderflags() must be a table");
@@ -279,7 +363,7 @@ static int celestia_setrenderflags(lua_State* l)
     while (lua_next(l, -2) != 0)
     {
         string key;
-        bool value = false;
+        bool   value = false;
         if (lua_isstring(l, -2))
         {
             key = lua_tostring(l, -2);
@@ -295,7 +379,9 @@ static int celestia_setrenderflags(lua_State* l)
         }
         else
         {
-            Celx_DoError(l, "Values in table-argument to celestia:setrenderflags() must be boolean");
+            Celx_DoError(
+                l,
+                "Values in table-argument to celestia:setrenderflags() must be boolean");
             return 0;
         }
         if (key == "lightdelay")
@@ -314,7 +400,7 @@ static int celestia_setrenderflags(lua_State* l)
         {
             GetLogger()->warn("Unknown key: {}\n", key);
         }
-        lua_pop(l,1);
+        lua_pop(l, 1);
     }
     appCore->getRenderer()->setRenderFlags(renderFlags);
     appCore->notifyWatchers(CelestiaCore::RenderFlagsChanged);
@@ -322,21 +408,22 @@ static int celestia_setrenderflags(lua_State* l)
     return 0;
 }
 
-static int celestia_getrenderflags(lua_State* l)
+static int
+celestia_getrenderflags(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected for celestia:getrenderflags()");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     lua_newtable(l);
     const uint64_t renderFlags = appCore->getRenderer()->getRenderFlags();
-    std::string rfmString;
+    std::string    rfmString;
     rfmString.reserve(FlagMapNameLength);
-    for (const auto& rfm : appCore->scriptMaps()->RenderFlagMap)
+    for (const auto &rfm : appCore->scriptMaps()->RenderFlagMap)
     {
         rfmString.clear();
         rfmString.append(rfm.first);
         lua_pushstring(l, rfmString.c_str());
         lua_pushboolean(l, (rfm.second & renderFlags) != 0);
-        lua_settable(l,-3);
+        lua_settable(l, -3);
     }
     lua_pushstring(l, "lightdelay");
     lua_pushboolean(l, appCore->getLightDelayActive());
@@ -344,40 +431,43 @@ static int celestia_getrenderflags(lua_State* l)
     return 1;
 }
 
-int celestia_getscreendimension(lua_State* l)
+int
+celestia_getscreendimension(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected for celestia:getscreendimension()");
     // error checking only:
     this_celestia(l);
     // Get the dimensions of the current viewport
-    int w, h;
-    CelestiaCore* appCore = to_celestia(l, 1);
+    int           w, h;
+    CelestiaCore *appCore = to_celestia(l, 1);
     appCore->getRenderer()->getViewport(nullptr, nullptr, &w, &h);
     lua_pushnumber(l, w);
     lua_pushnumber(l, h);
     return 2;
 }
 
-int celestia_getwindowdimension(lua_State* l)
+int
+celestia_getwindowdimension(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected for celestia:getwindowdimension()");
     // error checking only:
     this_celestia(l);
     // Get the dimensions of the current viewport
-    CelestiaCore* appCore = to_celestia(l, 1);
-    auto dimension = appCore->getWindowDimension();
+    CelestiaCore *appCore   = to_celestia(l, 1);
+    auto          dimension = appCore->getWindowDimension();
     lua_pushnumber(l, get<0>(dimension));
     lua_pushnumber(l, get<1>(dimension));
     return 2;
 }
 
-int celestia_getsafeareainsets(lua_State* l)
+int
+celestia_getsafeareainsets(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected for celestia:getsafeareainsets()");
     // error checking only:
     this_celestia(l);
-    CelestiaCore* appCore = to_celestia(l, 1);
-    const auto &edgeInsets = appCore->getSafeAreaInsets();
+    CelestiaCore *appCore    = to_celestia(l, 1);
+    const auto   &edgeInsets = appCore->getSafeAreaInsets();
     lua_pushnumber(l, get<0>(edgeInsets));
     lua_pushnumber(l, get<1>(edgeInsets));
     lua_pushnumber(l, get<2>(edgeInsets));
@@ -385,21 +475,43 @@ int celestia_getsafeareainsets(lua_State* l)
     return 4;
 }
 
-int celestia_setsafeareainsets(lua_State* l)
+int
+celestia_setsafeareainsets(lua_State *l)
 {
     Celx_CheckArgs(l, 5, 5, "Four arguments expected for celestia:setsafeareainsets()");
 
-    CelestiaCore* appCore = getAppCore(l, AllErrors);
+    CelestiaCore *appCore = getAppCore(l, AllErrors);
 
-    int left = (int)Celx_SafeGetNumber(l, 2, WrongType, "First argument to celestia:setsafeareainsets() must be a number", 0.0);
-    int top = (int)Celx_SafeGetNumber(l, 3, WrongType, "Second argument to celestia:setsafeareainsets() must be a number", 0.0);
-    int right = (int)Celx_SafeGetNumber(l, 4, WrongType, "Third argument to celestia:setsafeareainsets() must be a number", 0.0);
-    int bottom = (int)Celx_SafeGetNumber(l, 5, WrongType, "Fourth argument to celestia:setsafeareainsets() must be a number", 0.0);
+    int left = (int)Celx_SafeGetNumber(
+        l,
+        2,
+        WrongType,
+        "First argument to celestia:setsafeareainsets() must be a number",
+        0.0);
+    int top = (int)Celx_SafeGetNumber(
+        l,
+        3,
+        WrongType,
+        "Second argument to celestia:setsafeareainsets() must be a number",
+        0.0);
+    int right = (int)Celx_SafeGetNumber(
+        l,
+        4,
+        WrongType,
+        "Third argument to celestia:setsafeareainsets() must be a number",
+        0.0);
+    int bottom = (int)Celx_SafeGetNumber(
+        l,
+        5,
+        WrongType,
+        "Fourth argument to celestia:setsafeareainsets() must be a number",
+        0.0);
     appCore->setSafeAreaInsets(left, top, right, bottom);
     return 0;
 }
 
-static int celestia_getlayoutdirection(lua_State* l)
+static int
+celestia_getlayoutdirection(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No argument expected in celestia:getlayoutdirection");
     switch (this_celestia(l)->getLayoutDirection())
@@ -417,82 +529,98 @@ static int celestia_getlayoutdirection(lua_State* l)
     return 1;
 }
 
-static int celestia_setlayoutdirection(lua_State* l)
+static int
+celestia_setlayoutdirection(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected in celestia:setlayoutdirection");
     auto appCore = this_celestia(l);
 
-    string layoutDirection = Celx_SafeGetString(l, 2, AllErrors, "Argument to celestia:setlayoutdirection must be a string");
+    string layoutDirection = Celx_SafeGetString(
+        l,
+        2,
+        AllErrors,
+        "Argument to celestia:setlayoutdirection must be a string");
     if (layoutDirection == "ltr") // NOSONAR
         appCore->setLayoutDirection(CelestiaCore::LayoutDirection::LeftToRight);
     else if (layoutDirection == "rtl")
         appCore->setLayoutDirection(CelestiaCore::LayoutDirection::RightToLeft);
     else
-       Celx_DoError(l, "Invalid layoutDirection");
+        Celx_DoError(l, "Invalid layoutDirection");
     return 0;
 }
 
-static int celestia_showlabel(lua_State* l)
+static int
+celestia_showlabel(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1000, "Bad method call!");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    int argc = lua_gettop(l);
-    int flags = 0;
+    int   argc         = lua_gettop(l);
+    int   flags        = 0;
     auto &LabelFlagMap = appCore->scriptMaps()->LabelFlagMap;
     for (int i = 2; i <= argc; i++)
     {
-        string labelFlag = Celx_SafeGetString(l, i, AllErrors, "Arguments to celestia:showlabel() must be strings");
+        string labelFlag = Celx_SafeGetString(
+            l,
+            i,
+            AllErrors,
+            "Arguments to celestia:showlabel() must be strings");
         if (LabelFlagMap.count(labelFlag) > 0)
             flags |= LabelFlagMap[labelFlag];
     }
 
-    Renderer* r = appCore->getRenderer();
+    Renderer *r = appCore->getRenderer();
     r->setLabelMode(r->getLabelMode() | flags);
     appCore->notifyWatchers(CelestiaCore::LabelFlagsChanged);
 
     return 0;
 }
 
-static int celestia_hidelabel(lua_State* l)
+static int
+celestia_hidelabel(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1000, "Invalid number of arguments in celestia:hidelabel");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    int argc = lua_gettop(l);
-    int flags = 0;
+    int   argc         = lua_gettop(l);
+    int   flags        = 0;
     auto &LabelFlagMap = appCore->scriptMaps()->LabelFlagMap;
     for (int i = 2; i <= argc; i++)
     {
-        string labelFlag = Celx_SafeGetString(l, i, AllErrors, "Arguments to celestia:hidelabel() must be strings");
+        string labelFlag = Celx_SafeGetString(
+            l,
+            i,
+            AllErrors,
+            "Arguments to celestia:hidelabel() must be strings");
         if (LabelFlagMap.count(labelFlag) > 0)
             flags |= LabelFlagMap[labelFlag];
     }
 
-    Renderer* r = appCore->getRenderer();
+    Renderer *r = appCore->getRenderer();
     r->setLabelMode(r->getLabelMode() & ~flags);
     appCore->notifyWatchers(CelestiaCore::LabelFlagsChanged);
 
     return 0;
 }
 
-static int celestia_setlabelflags(lua_State* l)
+static int
+celestia_setlabelflags(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected for celestia:setlabelflags()");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     if (!lua_istable(l, 2))
     {
         Celx_DoError(l, "Argument to celestia:setlabelflags() must be a table");
         return 0;
     }
 
-    int labelFlags = appCore->getRenderer()->getLabelMode();
+    int   labelFlags   = appCore->getRenderer()->getLabelMode();
     auto &LabelFlagMap = appCore->scriptMaps()->LabelFlagMap;
     lua_pushnil(l);
     while (lua_next(l, -2) != 0)
     {
         string key;
-        bool value = false;
+        bool   value = false;
         if (lua_isstring(l, -2))
         {
             key = lua_tostring(l, -2);
@@ -523,7 +651,7 @@ static int celestia_setlabelflags(lua_State* l)
             else
                 labelFlags &= ~flag;
         }
-        lua_pop(l,1);
+        lua_pop(l, 1);
     }
     appCore->getRenderer()->setLabelMode(labelFlags);
     appCore->notifyWatchers(CelestiaCore::LabelFlagsChanged);
@@ -531,29 +659,31 @@ static int celestia_setlabelflags(lua_State* l)
     return 0;
 }
 
-static int celestia_getlabelflags(lua_State* l)
+static int
+celestia_getlabelflags(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected for celestia:getlabelflags()");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     lua_newtable(l);
-    const int labelFlags = appCore->getRenderer()->getLabelMode();
+    const int   labelFlags = appCore->getRenderer()->getLabelMode();
     std::string lfmString;
     lfmString.reserve(FlagMapNameLength);
-    for (const auto& lfm : appCore->scriptMaps()->LabelFlagMap)
+    for (const auto &lfm : appCore->scriptMaps()->LabelFlagMap)
     {
         lfmString.clear();
         lfmString.append(lfm.first);
         lua_pushstring(l, lfmString.c_str());
         lua_pushboolean(l, (lfm.second & labelFlags) != 0);
-        lua_settable(l,-3);
+        lua_settable(l, -3);
     }
     return 1;
 }
 
-static int celestia_setorbitflags(lua_State* l)
+static int
+celestia_setorbitflags(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected for celestia:setorbitflags()");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     if (!lua_istable(l, 2))
     {
         Celx_DoError(l, "Argument to celestia:setorbitflags() must be a table");
@@ -566,7 +696,7 @@ static int celestia_setorbitflags(lua_State* l)
     while (lua_next(l, -2) != 0)
     {
         string key;
-        bool value = false;
+        bool   value = false;
         if (lua_isstring(l, -2))
         {
             key = lua_tostring(l, -2);
@@ -597,43 +727,44 @@ static int celestia_setorbitflags(lua_State* l)
             else
                 orbitFlags &= ~flag;
         }
-        lua_pop(l,1);
+        lua_pop(l, 1);
     }
     appCore->getRenderer()->setOrbitMask(orbitFlags);
     return 0;
 }
 
-static int celestia_getorbitflags(lua_State* l)
+static int
+celestia_getorbitflags(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected for celestia:getorbitflags()");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     lua_newtable(l);
-    const int orbitFlags = appCore->getRenderer()->getOrbitMask();
+    const int   orbitFlags = appCore->getRenderer()->getOrbitMask();
     std::string btmString;
     btmString.reserve(FlagMapNameLength);
-    for (const auto& btm : appCore->scriptMaps()->BodyTypeMap)
+    for (const auto &btm : appCore->scriptMaps()->BodyTypeMap)
     {
         btmString.clear();
         btmString.append(btm.first);
         lua_pushstring(l, btmString.c_str());
         lua_pushboolean(l, (btm.second & orbitFlags) != 0);
-        lua_settable(l,-3);
+        lua_settable(l, -3);
     }
     return 1;
 }
 
-static int celestia_showconstellations(lua_State* l)
+static int
+celestia_showconstellations(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 2, "Expected no or one argument to celestia:showconstellations()");
 
-    CelestiaCore* appCore = getAppCore(l, AllErrors);
-    Universe* u = appCore->getSimulation()->getUniverse();
-    AsterismList* asterisms = u->getAsterisms();
+    CelestiaCore *appCore   = getAppCore(l, AllErrors);
+    Universe     *u         = appCore->getSimulation()->getUniverse();
+    AsterismList *asterisms = u->getAsterisms();
 
     if (lua_type(l, 2) == LUA_TNONE) // No argument passed
     {
-        for (auto& ast : *asterisms)
-            ast.setActive(true);
+        for (auto &ast : *asterisms) ast.setActive(true);
     }
     else if (!lua_istable(l, 2))
     {
@@ -645,40 +776,42 @@ static int celestia_showconstellations(lua_State* l)
         lua_pushnil(l);
         while (lua_next(l, -2) != 0)
         {
-            const char* constellation = "";
+            const char *constellation = "";
             if (lua_isstring(l, -1))
             {
                 constellation = lua_tostring(l, -1);
             }
             else
             {
-                Celx_DoError(l, "Values in table-argument to celestia:showconstellations() must be strings");
+                Celx_DoError(
+                    l,
+                    "Values in table-argument to celestia:showconstellations() must be strings");
                 return 0;
             }
-            for (auto& ast : *asterisms)
+            for (auto &ast : *asterisms)
             {
                 if (compareIgnoringCase(constellation, ast.getName(false)) == 0)
                     ast.setActive(true);
             }
-            lua_pop(l,1);
+            lua_pop(l, 1);
         }
     }
 
     return 0;
 }
 
-static int celestia_hideconstellations(lua_State* l)
+static int
+celestia_hideconstellations(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 2, "Expected no or one argument to celestia:hideconstellations()");
 
-    CelestiaCore* appCore = getAppCore(l, AllErrors);
-    Universe* u = appCore->getSimulation()->getUniverse();
-    AsterismList* asterisms = u->getAsterisms();
+    CelestiaCore *appCore   = getAppCore(l, AllErrors);
+    Universe     *u         = appCore->getSimulation()->getUniverse();
+    AsterismList *asterisms = u->getAsterisms();
 
     if (lua_type(l, 2) == LUA_TNONE) // No argument passed
     {
-        for (auto& ast : *asterisms)
-            ast.setActive(false);
+        for (auto &ast : *asterisms) ast.setActive(false);
     }
     else if (!lua_istable(l, 2))
     {
@@ -690,45 +823,62 @@ static int celestia_hideconstellations(lua_State* l)
         lua_pushnil(l);
         while (lua_next(l, -2) != 0)
         {
-            const char* constellation = "";
+            const char *constellation = "";
             if (lua_isstring(l, -1))
             {
                 constellation = lua_tostring(l, -1);
             }
             else
             {
-                Celx_DoError(l, "Values in table-argument to celestia:hideconstellations() must be strings");
+                Celx_DoError(
+                    l,
+                    "Values in table-argument to celestia:hideconstellations() must be strings");
                 return 0;
             }
-            for (auto& ast : *asterisms)
+            for (auto &ast : *asterisms)
             {
                 if (compareIgnoringCase(constellation, ast.getName(false)) == 0)
                     ast.setActive(false);
             }
-            lua_pop(l,1);
+            lua_pop(l, 1);
         }
     }
 
     return 0;
 }
 
-static int celestia_setconstellationcolor(lua_State* l)
+static int
+celestia_setconstellationcolor(lua_State *l)
 {
     Celx_CheckArgs(l, 4, 5, "Expected three or four arguments to celestia:setconstellationcolor()");
 
-    CelestiaCore* appCore = getAppCore(l, AllErrors);
-    Universe* u = appCore->getSimulation()->getUniverse();
-    AsterismList* asterisms = u->getAsterisms();
+    CelestiaCore *appCore   = getAppCore(l, AllErrors);
+    Universe     *u         = appCore->getSimulation()->getUniverse();
+    AsterismList *asterisms = u->getAsterisms();
 
-    float r = (float) Celx_SafeGetNumber(l, 2, WrongType, "First argument to celestia:setconstellationcolor() must be a number", 0.0);
-    float g = (float) Celx_SafeGetNumber(l, 3, WrongType, "Second argument to celestia:setconstellationcolor() must be a number", 0.0);
-    float b = (float) Celx_SafeGetNumber(l, 4, WrongType, "Third argument to celestia:setconstellationcolor() must be a number", 0.0);
+    float r = (float)Celx_SafeGetNumber(
+        l,
+        2,
+        WrongType,
+        "First argument to celestia:setconstellationcolor() must be a number",
+        0.0);
+    float g = (float)Celx_SafeGetNumber(
+        l,
+        3,
+        WrongType,
+        "Second argument to celestia:setconstellationcolor() must be a number",
+        0.0);
+    float b = (float)Celx_SafeGetNumber(
+        l,
+        4,
+        WrongType,
+        "Third argument to celestia:setconstellationcolor() must be a number",
+        0.0);
     Color constellationColor(r, g, b);
 
     if (lua_type(l, 5) == LUA_TNONE) // Fourth argument omited
     {
-        for (auto& ast : *asterisms)
-            ast.setOverrideColor(constellationColor);
+        for (auto &ast : *asterisms) ast.setOverrideColor(constellationColor);
     }
     else if (!lua_istable(l, 5))
     {
@@ -742,27 +892,30 @@ static int celestia_setconstellationcolor(lua_State* l)
         {
             if (lua_isstring(l, -1))
             {
-                const char* constellation = lua_tostring(l, -1);
-                for (auto& ast : *asterisms)
+                const char *constellation = lua_tostring(l, -1);
+                for (auto &ast : *asterisms)
                     if (compareIgnoringCase(constellation, ast.getName(false)) == 0)
                         ast.setOverrideColor(constellationColor);
             }
             else
             {
-                Celx_DoError(l, "Values in table-argument to celestia:setconstellationcolor() must be strings");
+                Celx_DoError(
+                    l,
+                    "Values in table-argument to celestia:setconstellationcolor() must be strings");
                 return 0;
             }
-            lua_pop(l,1);
+            lua_pop(l, 1);
         }
     }
 
     return 0;
 }
 
-static int celestia_setoverlayelements(lua_State* l)
+static int
+celestia_setoverlayelements(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected for celestia:setoverlayelements()");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     if (!lua_istable(l, 2))
     {
         Celx_DoError(l, "Argument to celestia:setoverlayelements() must be a table");
@@ -775,14 +928,16 @@ static int celestia_setoverlayelements(lua_State* l)
     while (lua_next(l, -2) != 0)
     {
         string key;
-        bool value = false;
+        bool   value = false;
         if (lua_isstring(l, -2))
         {
             key = lua_tostring(l, -2);
         }
         else
         {
-            Celx_DoError(l, "Keys in table-argument to celestia:setoverlayelements() must be strings");
+            Celx_DoError(
+                l,
+                "Keys in table-argument to celestia:setoverlayelements() must be strings");
             return 0;
         }
         if (lua_isboolean(l, -1))
@@ -791,7 +946,9 @@ static int celestia_setoverlayelements(lua_State* l)
         }
         else
         {
-            Celx_DoError(l, "Values in table-argument to celestia:setoverlayelements() must be boolean");
+            Celx_DoError(
+                l,
+                "Values in table-argument to celestia:setoverlayelements() must be boolean");
             return 0;
         }
         if (OverlayElementMap.count(key) == 0)
@@ -806,55 +963,60 @@ static int celestia_setoverlayelements(lua_State* l)
             else
                 overlayElements &= ~element;
         }
-        lua_pop(l,1);
+        lua_pop(l, 1);
     }
     appCore->setOverlayElements(overlayElements);
     return 0;
 }
 
-static int celestia_getoverlayelements(lua_State* l)
+static int
+celestia_getoverlayelements(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected for celestia:getoverlayelements()");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     lua_newtable(l);
-    const int overlayElements = appCore->getOverlayElements();
+    const int   overlayElements = appCore->getOverlayElements();
     std::string oemString;
     oemString.reserve(FlagMapNameLength);
-    for (const auto& oem : appCore->scriptMaps()->OverlayElementMap)
+    for (const auto &oem : appCore->scriptMaps()->OverlayElementMap)
     {
         oemString.clear();
         oemString.append(oem.first);
         lua_pushstring(l, oemString.c_str());
         lua_pushboolean(l, (oem.second & overlayElements) != 0);
-        lua_settable(l,-3);
+        lua_settable(l, -3);
     }
     return 1;
 }
 
-
-static int celestia_settextcolor(lua_State* l)
+static int
+celestia_settextcolor(lua_State *l)
 {
     Celx_CheckArgs(l, 4, 4, "Three arguments expected for celestia:settextcolor()");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    Color color;
-    double red     = Celx_SafeGetNumber(l, 2, WrongType, "settextcolor: color values must be numbers", 1.0);
-    double green   = Celx_SafeGetNumber(l, 3, WrongType, "settextcolor: color values must be numbers", 1.0);
-    double blue    = Celx_SafeGetNumber(l, 4, WrongType, "settextcolor: color values must be numbers", 1.0);
+    Color  color;
+    double red
+        = Celx_SafeGetNumber(l, 2, WrongType, "settextcolor: color values must be numbers", 1.0);
+    double green
+        = Celx_SafeGetNumber(l, 3, WrongType, "settextcolor: color values must be numbers", 1.0);
+    double blue
+        = Celx_SafeGetNumber(l, 4, WrongType, "settextcolor: color values must be numbers", 1.0);
 
     // opacity currently not settable
     double opacity = 1.0;
 
-    color = Color((float) red, (float) green, (float) blue, (float) opacity);
+    color = Color((float)red, (float)green, (float)blue, (float)opacity);
     appCore->setTextColor(color);
 
     return 0;
 }
 
-static int celestia_gettextcolor(lua_State* l)
+static int
+celestia_gettextcolor(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected for celestia:getgalaxylightgain()");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
     Color color = appCore->getTextColor();
     lua_pushnumber(l, color.red());
@@ -864,8 +1026,8 @@ static int celestia_gettextcolor(lua_State* l)
     return 3;
 }
 
-
-static int celestia_setlabelcolor(lua_State* l)
+static int
+celestia_setlabelcolor(lua_State *l)
 {
     Celx_CheckArgs(l, 5, 5, "Four arguments expected for celestia:setlabelcolor()");
     if (!lua_isstring(l, 2))
@@ -874,9 +1036,9 @@ static int celestia_setlabelcolor(lua_State* l)
         return 0;
     }
 
-    Color* color = nullptr;
+    Color *color = nullptr;
     string key;
-    key = lua_tostring(l, 2);
+    key                 = lua_tostring(l, 2);
     auto &LabelColorMap = this_celestia(l)->scriptMaps()->LabelColorMap;
     if (LabelColorMap.count(key) == 0)
     {
@@ -887,29 +1049,35 @@ static int celestia_setlabelcolor(lua_State* l)
         color = LabelColorMap[key];
     }
 
-    double red     = Celx_SafeGetNumber(l, 3, AllErrors, "setlabelcolor: color values must be numbers");
-    double green   = Celx_SafeGetNumber(l, 4, AllErrors, "setlabelcolor: color values must be numbers");
-    double blue    = Celx_SafeGetNumber(l, 5, AllErrors, "setlabelcolor: color values must be numbers");
+    double red = Celx_SafeGetNumber(l, 3, AllErrors, "setlabelcolor: color values must be numbers");
+    double green
+        = Celx_SafeGetNumber(l, 4, AllErrors, "setlabelcolor: color values must be numbers");
+    double blue
+        = Celx_SafeGetNumber(l, 5, AllErrors, "setlabelcolor: color values must be numbers");
 
     // opacity currently not settable
     double opacity = 1.0;
 
     if (color != nullptr)
     {
-        *color = Color((float) red, (float) green, (float) blue, (float) opacity);
+        *color = Color((float)red, (float)green, (float)blue, (float)opacity);
     }
 
     return 1;
 }
 
-
-static int celestia_getlabelcolor(lua_State* l)
+static int
+celestia_getlabelcolor(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected for celestia:getlabelcolor()");
-    string key = Celx_SafeGetString(l, 2, AllErrors, "Argument to celestia:getlabelcolor() must be a string");
+    string key = Celx_SafeGetString(
+        l,
+        2,
+        AllErrors,
+        "Argument to celestia:getlabelcolor() must be a string");
 
-    Color* labelColor = nullptr;
-    auto &LabelColorMap = this_celestia(l)->scriptMaps()->LabelColorMap;
+    Color *labelColor    = nullptr;
+    auto  &LabelColorMap = this_celestia(l)->scriptMaps()->LabelColorMap;
     if (LabelColorMap.count(key) == 0)
     {
         GetLogger()->error("Unknown label style: {}\n", key);
@@ -924,8 +1092,8 @@ static int celestia_getlabelcolor(lua_State* l)
     return 3;
 }
 
-
-static int celestia_setlinecolor(lua_State* l)
+static int
+celestia_setlinecolor(lua_State *l)
 {
     Celx_CheckArgs(l, 5, 5, "Four arguments expected for celestia:setlinecolor()");
     if (!lua_isstring(l, 2))
@@ -934,9 +1102,9 @@ static int celestia_setlinecolor(lua_State* l)
         return 0;
     }
 
-    Color* color = nullptr;
+    Color *color = nullptr;
     string key;
-    key = lua_tostring(l, 2);
+    key                = lua_tostring(l, 2);
     auto &LineColorMap = this_celestia(l)->scriptMaps()->LineColorMap;
     if (LineColorMap.count(key) == 0)
     {
@@ -947,26 +1115,31 @@ static int celestia_setlinecolor(lua_State* l)
         color = LineColorMap[key];
     }
 
-    double red     = Celx_SafeGetNumber(l, 3, AllErrors, "setlinecolor: color values must be numbers");
-    double green   = Celx_SafeGetNumber(l, 4, AllErrors, "setlinecolor: color values must be numbers");
-    double blue    = Celx_SafeGetNumber(l, 5, AllErrors, "setlinecolor: color values must be numbers");
+    double red = Celx_SafeGetNumber(l, 3, AllErrors, "setlinecolor: color values must be numbers");
+    double green
+        = Celx_SafeGetNumber(l, 4, AllErrors, "setlinecolor: color values must be numbers");
+    double blue = Celx_SafeGetNumber(l, 5, AllErrors, "setlinecolor: color values must be numbers");
 
     // opacity currently not settable
     double opacity = 1.0;
 
     if (color != nullptr)
     {
-        *color = Color((float) red, (float) green, (float) blue, (float) opacity);
+        *color = Color((float)red, (float)green, (float)blue, (float)opacity);
     }
 
     return 1;
 }
 
-
-static int celestia_getlinecolor(lua_State* l)
+static int
+celestia_getlinecolor(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected for celestia:getlinecolor()");
-    string key = Celx_SafeGetString(l, 2, AllErrors, "Argument to celestia:getlinecolor() must be a string");
+    string key = Celx_SafeGetString(
+        l,
+        2,
+        AllErrors,
+        "Argument to celestia:getlinecolor() must be a string");
 
     auto &LineColorMap = this_celestia(l)->scriptMaps()->LineColorMap;
     if (LineColorMap.count(key) == 0)
@@ -975,7 +1148,7 @@ static int celestia_getlinecolor(lua_State* l)
         return 0;
     }
 
-    Color* lineColor = LineColorMap[key];
+    Color *lineColor = LineColorMap[key];
     lua_pushnumber(l, lineColor->red());
     lua_pushnumber(l, lineColor->green());
     lua_pushnumber(l, lineColor->blue());
@@ -983,12 +1156,16 @@ static int celestia_getlinecolor(lua_State* l)
     return 3;
 }
 
-
-static int celestia_setfaintestvisible(lua_State* l)
+static int
+celestia_setfaintestvisible(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected for celestia:setfaintestvisible()");
-    CelestiaCore* appCore = this_celestia(l);
-    float faintest = (float)Celx_SafeGetNumber(l, 2, AllErrors, "Argument to celestia:setfaintestvisible() must be a number");
+    CelestiaCore *appCore  = this_celestia(l);
+    float         faintest = (float)Celx_SafeGetNumber(
+        l,
+        2,
+        AllErrors,
+        "Argument to celestia:setfaintestvisible() must be a number");
     if ((appCore->getRenderer()->getRenderFlags() & Renderer::ShowAutoMag) == 0)
     {
         faintest = min(15.0f, max(1.0f, faintest));
@@ -1004,10 +1181,11 @@ static int celestia_setfaintestvisible(lua_State* l)
     return 0;
 }
 
-static int celestia_getfaintestvisible(lua_State* l)
+static int
+celestia_getfaintestvisible(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected for celestia:getfaintestvisible()");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     if ((appCore->getRenderer()->getRenderFlags() & Renderer::ShowAutoMag) == 0)
     {
         lua_pushnumber(l, appCore->getSimulation()->getFaintestVisible());
@@ -1019,17 +1197,23 @@ static int celestia_getfaintestvisible(lua_State* l)
     return 1;
 }
 
-static int celestia_setgalaxylightgain(lua_State* l)
+static int
+celestia_setgalaxylightgain(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected for celestia:setgalaxylightgain()");
-    float lightgain = (float)Celx_SafeGetNumber(l, 2, AllErrors, "Argument to celestia:setgalaxylightgain() must be a number");
+    float lightgain = (float)Celx_SafeGetNumber(
+        l,
+        2,
+        AllErrors,
+        "Argument to celestia:setgalaxylightgain() must be a number");
     lightgain = min(1.0f, max(0.0f, lightgain));
     Galaxy::setLightGain(lightgain);
 
     return 0;
 }
 
-static int celestia_getgalaxylightgain(lua_State* l)
+static int
+celestia_getgalaxylightgain(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected for celestia:getgalaxylightgain()");
     lua_pushnumber(l, Galaxy::getLightGain());
@@ -1037,30 +1221,37 @@ static int celestia_getgalaxylightgain(lua_State* l)
     return 1;
 }
 
-static int celestia_setminfeaturesize(lua_State* l)
+static int
+celestia_setminfeaturesize(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected for celestia:setminfeaturesize()");
-    CelestiaCore* appCore = this_celestia(l);
-    float minFeatureSize = (float)Celx_SafeGetNumber(l, 2, AllErrors, "Argument to celestia:setminfeaturesize() must be a number");
+    CelestiaCore *appCore        = this_celestia(l);
+    float         minFeatureSize = (float)Celx_SafeGetNumber(
+        l,
+        2,
+        AllErrors,
+        "Argument to celestia:setminfeaturesize() must be a number");
     minFeatureSize = max(0.0f, minFeatureSize);
     appCore->getRenderer()->setMinimumFeatureSize(minFeatureSize);
     return 0;
 }
 
-static int celestia_getminfeaturesize(lua_State* l)
+static int
+celestia_getminfeaturesize(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected for celestia:getminfeaturesize()");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     lua_pushnumber(l, appCore->getRenderer()->getMinimumFeatureSize());
     return 1;
 }
 
-static int celestia_getobserver(lua_State* l)
+static int
+celestia_getobserver(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected for celestia:getobserver()");
 
-    CelestiaCore* appCore = this_celestia(l);
-    Observer* o = appCore->getSimulation()->getActiveObserver();
+    CelestiaCore *appCore = this_celestia(l);
+    Observer     *o       = appCore->getSimulation()->getActiveObserver();
     if (o == nullptr)
         lua_pushnil(l);
     else
@@ -1069,12 +1260,13 @@ static int celestia_getobserver(lua_State* l)
     return 1;
 }
 
-static int celestia_getobservers(lua_State* l)
+static int
+celestia_getobservers(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected for celestia:getobservers()");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    vector<Observer*> observer_list;
+    vector<Observer *> observer_list;
     getObservers(appCore, observer_list);
     lua_newtable(l);
     for (unsigned int i = 0; i < observer_list.size(); i++)
@@ -1086,17 +1278,19 @@ static int celestia_getobservers(lua_State* l)
     return 1;
 }
 
-static int celestia_getselection(lua_State* l)
+static int
+celestia_getselection(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected to celestia:getselection()");
-    CelestiaCore* appCore = this_celestia(l);
-    Selection sel = appCore->getSimulation()->getSelection();
+    CelestiaCore *appCore = this_celestia(l);
+    Selection     sel     = appCore->getSimulation()->getSelection();
     object_new(l, sel);
 
     return 1;
 }
 
-static int celestia_find(lua_State* l)
+static int
+celestia_find(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected for function celestia:find()");
     if (!lua_isstring(l, 2))
@@ -1105,8 +1299,8 @@ static int celestia_find(lua_State* l)
         return 0;
     }
 
-    CelestiaCore* appCore = this_celestia(l);
-    Simulation* sim = appCore->getSimulation();
+    CelestiaCore *appCore = this_celestia(l);
+    Simulation   *sim     = appCore->getSimulation();
     // Should use universe not simulation for finding objects
     Selection sel = sim->findObjectFromPath(lua_tostring(l, 2));
     object_new(l, sel);
@@ -1114,13 +1308,14 @@ static int celestia_find(lua_State* l)
     return 1;
 }
 
-static int celestia_select(lua_State* l)
+static int
+celestia_select(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected for celestia:select()");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    Simulation* sim = appCore->getSimulation();
-    Selection* sel = to_object(l, 2);
+    Simulation *sim = appCore->getSimulation();
+    Selection  *sel = to_object(l, 2);
 
     // If the argument is an object, set the selection; if it's anything else
     // clear the selection.
@@ -1132,13 +1327,14 @@ static int celestia_select(lua_State* l)
     return 0;
 }
 
-static int celestia_mark(lua_State* l)
+static int
+celestia_mark(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected to function celestia:mark");
 
-    CelestiaCore* appCore = this_celestia(l);
-    Simulation* sim = appCore->getSimulation();
-    Selection* sel = to_object(l, 2);
+    CelestiaCore *appCore = this_celestia(l);
+    Simulation   *sim     = appCore->getSimulation();
+    Selection    *sel     = to_object(l, 2);
 
     if (sel != nullptr)
     {
@@ -1156,13 +1352,14 @@ static int celestia_mark(lua_State* l)
     return 0;
 }
 
-static int celestia_unmark(lua_State* l)
+static int
+celestia_unmark(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected to function celestia:unmark");
 
-    CelestiaCore* appCore = this_celestia(l);
-    Simulation* sim = appCore->getSimulation();
-    Selection* sel = to_object(l, 2);
+    CelestiaCore *appCore = this_celestia(l);
+    Simulation   *sim     = appCore->getSimulation();
+    Selection    *sel     = to_object(l, 2);
 
     if (sel != nullptr)
     {
@@ -1176,55 +1373,61 @@ static int celestia_unmark(lua_State* l)
     return 0;
 }
 
-static int celestia_gettime(lua_State* l)
+static int
+celestia_gettime(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No argument expected to function celestia:gettime");
 
-    CelestiaCore* appCore = this_celestia(l);
-    Simulation* sim = appCore->getSimulation();
+    CelestiaCore *appCore = this_celestia(l);
+    Simulation   *sim     = appCore->getSimulation();
     lua_pushnumber(l, sim->getTime());
 
     return 1;
 }
 
-static int celestia_gettimescale(lua_State* l)
+static int
+celestia_gettimescale(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No argument expected to function celestia:gettimescale");
 
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     lua_pushnumber(l, appCore->getSimulation()->getTimeScale());
 
     return 1;
 }
 
-static int celestia_settime(lua_State* l)
+static int
+celestia_settime(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected to function celestia:settime");
 
-    CelestiaCore* appCore = this_celestia(l);
-    double t = Celx_SafeGetNumber(l, 2, AllErrors, "First arg to celestia:settime must be a number");
+    CelestiaCore *appCore = this_celestia(l);
+    double        t
+        = Celx_SafeGetNumber(l, 2, AllErrors, "First arg to celestia:settime must be a number");
     appCore->getSimulation()->setTime(t);
 
     return 0;
 }
 
-static int celestia_ispaused(lua_State* l)
+static int
+celestia_ispaused(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No argument expected to function celestia:ispaused");
 
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     lua_pushboolean(l, appCore->getSimulation()->getPauseState());
 
     return 1;
 }
 
-static int celestia_pause(lua_State* l)
+static int
+celestia_pause(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 2, "No or one argument expected to function celestia:paused");
 
-    CelestiaCore* appCore = this_celestia(l);
-    bool cur_state = appCore->getSimulation()->getPauseState();
-    bool new_state;
+    CelestiaCore *appCore   = this_celestia(l);
+    bool          cur_state = appCore->getSimulation()->getPauseState();
+    bool          new_state;
 
     if (lua_type(l, 2) != LUA_TNONE) // An argument passed
     {
@@ -1250,73 +1453,120 @@ static int celestia_pause(lua_State* l)
     return 1;
 }
 
-static int celestia_synchronizetime(lua_State* l)
+static int
+celestia_synchronizetime(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected to function celestia:synchronizetime");
 
-    CelestiaCore* appCore = this_celestia(l);
-    bool sync = Celx_SafeGetBoolean(l, 2, AllErrors, "Argument to celestia:synchronizetime must be a boolean");
+    CelestiaCore *appCore = this_celestia(l);
+    bool          sync    = Celx_SafeGetBoolean(
+        l,
+        2,
+        AllErrors,
+        "Argument to celestia:synchronizetime must be a boolean");
     appCore->getSimulation()->setSyncTime(sync);
 
     return 0;
 }
 
-static int celestia_istimesynchronized(lua_State* l)
+static int
+celestia_istimesynchronized(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No argument expected to function celestia:istimesynchronized");
 
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     lua_pushboolean(l, appCore->getSimulation()->getSyncTime());
 
     return 1;
 }
 
-
-static int celestia_settimescale(lua_State* l)
+static int
+celestia_settimescale(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected to function celestia:settimescale");
 
-    CelestiaCore* appCore = this_celestia(l);
-    double t = Celx_SafeGetNumber(l, 2, AllErrors, "Second arg to celestia:settimescale must be a number");
+    CelestiaCore *appCore = this_celestia(l);
+    double        t       = Celx_SafeGetNumber(
+        l,
+        2,
+        AllErrors,
+        "Second arg to celestia:settimescale must be a number");
     appCore->getSimulation()->setTimeScale(t);
 
     return 0;
 }
 
-static int celestia_tojulianday(lua_State* l)
+static int
+celestia_tojulianday(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 7, "Wrong number of arguments to function celestia:tojulianday");
 
     // for error checking only:
     this_celestia(l);
 
-    int year = (int)Celx_SafeGetNumber(l, 2, AllErrors, "First arg to celestia:tojulianday must be a number", 0.0);
-    int month = (int)Celx_SafeGetNumber(l, 3, WrongType, "Second arg to celestia:tojulianday must be a number", 1.0);
-    int day = (int)Celx_SafeGetNumber(l, 4, WrongType, "Third arg to celestia:tojulianday must be a number", 1.0);
-    int hour = (int)Celx_SafeGetNumber(l, 5, WrongType, "Fourth arg to celestia:tojulianday must be a number", 0.0);
-    int minute = (int)Celx_SafeGetNumber(l, 6, WrongType, "Fifth arg to celestia:tojulianday must be a number", 0.0);
-    double seconds = Celx_SafeGetNumber(l, 7, WrongType, "Sixth arg to celestia:tojulianday must be a number", 0.0);
+    int year = (int)Celx_SafeGetNumber(
+        l,
+        2,
+        AllErrors,
+        "First arg to celestia:tojulianday must be a number",
+        0.0);
+    int month = (int)Celx_SafeGetNumber(
+        l,
+        3,
+        WrongType,
+        "Second arg to celestia:tojulianday must be a number",
+        1.0);
+    int day = (int)Celx_SafeGetNumber(
+        l,
+        4,
+        WrongType,
+        "Third arg to celestia:tojulianday must be a number",
+        1.0);
+    int hour = (int)Celx_SafeGetNumber(
+        l,
+        5,
+        WrongType,
+        "Fourth arg to celestia:tojulianday must be a number",
+        0.0);
+    int minute = (int)Celx_SafeGetNumber(
+        l,
+        6,
+        WrongType,
+        "Fifth arg to celestia:tojulianday must be a number",
+        0.0);
+    double seconds = Celx_SafeGetNumber(
+        l,
+        7,
+        WrongType,
+        "Sixth arg to celestia:tojulianday must be a number",
+        0.0);
 
     astro::Date date(year, month, day);
-    date.hour = hour;
-    date.minute = minute;
+    date.hour    = hour;
+    date.minute  = minute;
     date.seconds = seconds;
 
-    double jd = (double) date;
+    double jd = (double)date;
 
     lua_pushnumber(l, jd);
 
     return 1;
 }
 
-static int celestia_fromjulianday(lua_State* l)
+static int
+celestia_fromjulianday(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "Wrong number of arguments to function celestia:fromjulianday");
 
     // for error checking only:
     this_celestia(l);
 
-    double jd = Celx_SafeGetNumber(l, 2, AllErrors, "First arg to celestia:fromjulianday must be a number", 0.0);
+    double jd = Celx_SafeGetNumber(
+        l,
+        2,
+        AllErrors,
+        "First arg to celestia:fromjulianday must be a number",
+        0.0);
     astro::Date date(jd);
 
     lua_newtable(l);
@@ -1330,27 +1580,45 @@ static int celestia_fromjulianday(lua_State* l)
     return 1;
 }
 
-
 // Convert a UTC Julian date to a TDB Julian day
 // TODO: also support a single table argument of the form output by
 // celestia_tdbtoutc.
-static int celestia_utctotdb(lua_State* l)
+static int
+celestia_utctotdb(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 7, "Wrong number of arguments to function celestia:utctotdb");
 
     // for error checking only:
     this_celestia(l);
 
-    int year = (int) Celx_SafeGetNumber(l, 2, AllErrors, "First arg to celestia:utctotdb must be a number", 0.0);
-    int month = (int) Celx_SafeGetNumber(l, 3, WrongType, "Second arg to celestia:utctotdb must be a number", 1.0);
-    int day = (int) Celx_SafeGetNumber(l, 4, WrongType, "Third arg to celestia:utctotdb must be a number", 1.0);
-    int hour = (int)Celx_SafeGetNumber(l, 5, WrongType, "Fourth arg to celestia:utctotdb must be a number", 0.0);
-    int minute = (int)Celx_SafeGetNumber(l, 6, WrongType, "Fifth arg to celestia:utctotdb must be a number", 0.0);
-    double seconds = Celx_SafeGetNumber(l, 7, WrongType, "Sixth arg to celestia:utctotdb must be a number", 0.0);
+    int year = (int)
+        Celx_SafeGetNumber(l, 2, AllErrors, "First arg to celestia:utctotdb must be a number", 0.0);
+    int month = (int)Celx_SafeGetNumber(
+        l,
+        3,
+        WrongType,
+        "Second arg to celestia:utctotdb must be a number",
+        1.0);
+    int day = (int)
+        Celx_SafeGetNumber(l, 4, WrongType, "Third arg to celestia:utctotdb must be a number", 1.0);
+    int hour = (int)Celx_SafeGetNumber(
+        l,
+        5,
+        WrongType,
+        "Fourth arg to celestia:utctotdb must be a number",
+        0.0);
+    int minute = (int)
+        Celx_SafeGetNumber(l, 6, WrongType, "Fifth arg to celestia:utctotdb must be a number", 0.0);
+    double seconds = Celx_SafeGetNumber(
+        l,
+        7,
+        WrongType,
+        "Sixth arg to celestia:utctotdb must be a number",
+        0.0);
 
     astro::Date date(year, month, day);
-    date.hour = hour;
-    date.minute = minute;
+    date.hour    = hour;
+    date.minute  = minute;
     date.seconds = seconds;
 
     double jd = astro::UTCtoTDB(date);
@@ -1360,16 +1628,21 @@ static int celestia_utctotdb(lua_State* l)
     return 1;
 }
 
-
 // Convert a TDB Julian day to a UTC Julian date (table format)
-static int celestia_tdbtoutc(lua_State* l)
+static int
+celestia_tdbtoutc(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "Wrong number of arguments to function celestia:tdbtoutc");
 
     // for error checking only:
     this_celestia(l);
 
-    double jd = Celx_SafeGetNumber(l, 2, AllErrors, "First arg to celestia:tdbtoutc must be a number", 0.0);
+    double jd = Celx_SafeGetNumber(
+        l,
+        2,
+        AllErrors,
+        "First arg to celestia:tdbtoutc must be a number",
+        0.0);
     astro::Date date = astro::TDBtoUTC(jd);
 
     lua_newtable(l);
@@ -1383,8 +1656,8 @@ static int celestia_tdbtoutc(lua_State* l)
     return 1;
 }
 
-
-static int celestia_getsystemtime(lua_State* l)
+static int
+celestia_getsystemtime(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No argument expected to function celestia:getsystemtime");
 
@@ -1394,42 +1667,43 @@ static int celestia_getsystemtime(lua_State* l)
     return 1;
 }
 
-
-static int celestia_unmarkall(lua_State* l)
+static int
+celestia_unmarkall(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected to function celestia:unmarkall");
 
-    CelestiaCore* appCore = this_celestia(l);
-    Simulation* sim = appCore->getSimulation();
+    CelestiaCore *appCore = this_celestia(l);
+    Simulation   *sim     = appCore->getSimulation();
     sim->getUniverse()->unmarkAll();
 
     return 0;
 }
 
-static int celestia_getstarcount(lua_State* l)
+static int
+celestia_getstarcount(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected to function celestia:getstarcount");
 
-    CelestiaCore* appCore = this_celestia(l);
-    Universe* u = appCore->getSimulation()->getUniverse();
+    CelestiaCore *appCore = this_celestia(l);
+    Universe     *u       = appCore->getSimulation()->getUniverse();
     lua_pushnumber(l, u->getStarCatalog()->size());
 
     return 1;
 }
 
-
 // Stars iterator function; two upvalues expected
-static int celestia_stars_iter(lua_State* l)
+static int
+celestia_stars_iter(lua_State *l)
 {
-    CelestiaCore* appCore = to_celestia(l, lua_upvalueindex(1));
+    CelestiaCore *appCore = to_celestia(l, lua_upvalueindex(1));
     if (appCore == nullptr)
     {
         Celx_DoError(l, "Bad celestia object!");
         return 0;
     }
 
-    auto i = (uint32_t) lua_tonumber(l, lua_upvalueindex(2));
-    Universe* u = appCore->getSimulation()->getUniverse();
+    auto      i = (uint32_t)lua_tonumber(l, lua_upvalueindex(2));
+    Universe *u = appCore->getSimulation()->getUniverse();
 
     if (i < u->getStarCatalog()->size())
     {
@@ -1437,7 +1711,7 @@ static int celestia_stars_iter(lua_State* l)
         lua_pushnumber(l, i + 1);
         lua_replace(l, lua_upvalueindex(2));
 
-        Star* star = u->getStarCatalog()->getStar(i);
+        Star *star = u->getStarCatalog()->getStar(i);
         if (star == nullptr)
             lua_pushnil(l);
         else
@@ -1450,43 +1724,43 @@ static int celestia_stars_iter(lua_State* l)
     return 0;
 }
 
-
-static int celestia_stars(lua_State* l)
+static int
+celestia_stars(lua_State *l)
 {
     // Push a closure with two upvalues: the celestia object and a
     // counter.
-    lua_pushvalue(l, 1);    // Celestia object
-    lua_pushnumber(l, 0);   // counter
+    lua_pushvalue(l, 1);  // Celestia object
+    lua_pushnumber(l, 0); // counter
     lua_pushcclosure(l, celestia_stars_iter, 2);
 
     return 1;
 }
 
-
-static int celestia_getdsocount(lua_State* l)
+static int
+celestia_getdsocount(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected to function celestia:getdsocount");
 
-    CelestiaCore* appCore = this_celestia(l);
-    Universe* u = appCore->getSimulation()->getUniverse();
+    CelestiaCore *appCore = this_celestia(l);
+    Universe     *u       = appCore->getSimulation()->getUniverse();
     lua_pushnumber(l, u->getDSOCatalog()->size());
 
     return 1;
 }
 
-
 // DSOs iterator function; two upvalues expected
-static int celestia_dsos_iter(lua_State* l)
+static int
+celestia_dsos_iter(lua_State *l)
 {
-    CelestiaCore* appCore = to_celestia(l, lua_upvalueindex(1));
+    CelestiaCore *appCore = to_celestia(l, lua_upvalueindex(1));
     if (appCore == nullptr)
     {
         Celx_DoError(l, "Bad celestia object!");
         return 0;
     }
 
-    auto i = (uint32_t) lua_tonumber(l, lua_upvalueindex(2));
-    Universe* u = appCore->getSimulation()->getUniverse();
+    auto      i = (uint32_t)lua_tonumber(l, lua_upvalueindex(2));
+    Universe *u = appCore->getSimulation()->getUniverse();
 
     if (i < u->getDSOCatalog()->size())
     {
@@ -1494,7 +1768,7 @@ static int celestia_dsos_iter(lua_State* l)
         lua_pushnumber(l, i + 1);
         lua_replace(l, lua_upvalueindex(2));
 
-        DeepSkyObject* dso = u->getDSOCatalog()->getDSO(i);
+        DeepSkyObject *dso = u->getDSOCatalog()->getDSO(i);
         if (dso == nullptr)
             lua_pushnil(l);
         else
@@ -1507,25 +1781,27 @@ static int celestia_dsos_iter(lua_State* l)
     return 0;
 }
 
-
-static int celestia_dsos(lua_State* l)
+static int
+celestia_dsos(lua_State *l)
 {
     // Push a closure with two upvalues: the celestia object and a
     // counter.
-    lua_pushvalue(l, 1);    // Celestia object
-    lua_pushnumber(l, 0);   // counter
+    lua_pushvalue(l, 1);  // Celestia object
+    lua_pushnumber(l, 0); // counter
     lua_pushcclosure(l, celestia_dsos_iter, 2);
 
     return 1;
 }
 
-static int celestia_setambient(lua_State* l)
+static int
+celestia_setambient(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected in celestia:setambient");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    Renderer* renderer = appCore->getRenderer();
-    double ambientLightLevel = Celx_SafeGetNumber(l, 2, AllErrors, "Argument to celestia:setambient must be a number");
+    Renderer *renderer = appCore->getRenderer();
+    double    ambientLightLevel
+        = Celx_SafeGetNumber(l, 2, AllErrors, "Argument to celestia:setambient must be a number");
     ambientLightLevel = std::clamp(ambientLightLevel, 0.0, 1.0);
 
     if (renderer != nullptr)
@@ -1535,12 +1811,13 @@ static int celestia_setambient(lua_State* l)
     return 0;
 }
 
-static int celestia_getambient(lua_State* l)
+static int
+celestia_getambient(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No argument expected in celestia:setambient");
-    const CelestiaCore* appCore = this_celestia(l);
+    const CelestiaCore *appCore = this_celestia(l);
 
-    const Renderer* renderer = appCore->getRenderer();
+    const Renderer *renderer = appCore->getRenderer();
     if (renderer == nullptr)
     {
         Celx_DoError(l, "Internal Error: renderer is nullptr!");
@@ -1551,13 +1828,18 @@ static int celestia_getambient(lua_State* l)
     return 1;
 }
 
-static int celestia_settintsaturation(lua_State* l)
+static int
+celestia_settintsaturation(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected in celestia:settintsaturation");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    Renderer* renderer = appCore->getRenderer();
-    double tintSaturation = Celx_SafeGetNumber(l, 2, AllErrors, "Argument to celestia:settintsaturation must be a number");
+    Renderer *renderer       = appCore->getRenderer();
+    double    tintSaturation = Celx_SafeGetNumber(
+        l,
+        2,
+        AllErrors,
+        "Argument to celestia:settintsaturation must be a number");
     tintSaturation = std::clamp(tintSaturation, 0.0, 1.0);
 
     if (renderer != nullptr)
@@ -1567,12 +1849,13 @@ static int celestia_settintsaturation(lua_State* l)
     return 0;
 }
 
-static int celestia_gettintsaturation(lua_State* l)
+static int
+celestia_gettintsaturation(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No argument expected in celestia:gettintsaturation");
-    const CelestiaCore* appCore = this_celestia(l);
+    const CelestiaCore *appCore = this_celestia(l);
 
-    const Renderer* renderer = appCore->getRenderer();
+    const Renderer *renderer = appCore->getRenderer();
     if (renderer == nullptr)
     {
         Celx_DoError(l, "Internal Error: renderer is nullptr!");
@@ -1583,13 +1866,18 @@ static int celestia_gettintsaturation(lua_State* l)
     return 1;
 }
 
-static int celestia_setminorbitsize(lua_State* l)
+static int
+celestia_setminorbitsize(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected in celestia:setminorbitsize");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    double orbitSize = Celx_SafeGetNumber(l, 2, AllErrors, "Argument to celestia:setminorbitsize() must be a number");
-    Renderer* renderer = appCore->getRenderer();
+    double orbitSize = Celx_SafeGetNumber(
+        l,
+        2,
+        AllErrors,
+        "Argument to celestia:setminorbitsize() must be a number");
+    Renderer *renderer = appCore->getRenderer();
     if (renderer == nullptr)
     {
         Celx_DoError(l, "Internal Error: renderer is nullptr!");
@@ -1601,12 +1889,13 @@ static int celestia_setminorbitsize(lua_State* l)
     return 0;
 }
 
-static int celestia_getminorbitsize(lua_State* l)
+static int
+celestia_getminorbitsize(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No argument expected in celestia:getminorbitsize");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    Renderer* renderer = appCore->getRenderer();
+    Renderer *renderer = appCore->getRenderer();
     if (renderer == nullptr)
     {
         Celx_DoError(l, "Internal Error: renderer is nullptr!");
@@ -1617,13 +1906,18 @@ static int celestia_getminorbitsize(lua_State* l)
     return 1;
 }
 
-static int celestia_setstardistancelimit(lua_State* l)
+static int
+celestia_setstardistancelimit(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected in celestia:setstardistancelimit");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    double distanceLimit = Celx_SafeGetNumber(l, 2, AllErrors, "Argument to celestia:setstardistancelimit() must be a number");
-    Renderer* renderer = appCore->getRenderer();
+    double distanceLimit = Celx_SafeGetNumber(
+        l,
+        2,
+        AllErrors,
+        "Argument to celestia:setstardistancelimit() must be a number");
+    Renderer *renderer = appCore->getRenderer();
     if (renderer == nullptr)
     {
         Celx_DoError(l, "Internal Error: renderer is nullptr!");
@@ -1634,12 +1928,13 @@ static int celestia_setstardistancelimit(lua_State* l)
     return 0;
 }
 
-static int celestia_getstardistancelimit(lua_State* l)
+static int
+celestia_getstardistancelimit(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No argument expected in celestia:getstardistancelimit");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    Renderer* renderer = appCore->getRenderer();
+    Renderer *renderer = appCore->getRenderer();
     if (renderer == nullptr)
     {
         Celx_DoError(l, "Internal Error: renderer is nullptr!");
@@ -1650,12 +1945,13 @@ static int celestia_getstardistancelimit(lua_State* l)
     return 1;
 }
 
-static int celestia_getstarstyle(lua_State* l)
+static int
+celestia_getstarstyle(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No argument expected in celestia:getstarstyle");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    Renderer* renderer = appCore->getRenderer();
+    Renderer *renderer = appCore->getRenderer();
     if (renderer == nullptr)
     {
         Celx_DoError(l, "Internal Error: renderer is nullptr!");
@@ -1666,24 +1962,29 @@ static int celestia_getstarstyle(lua_State* l)
     switch (starStyle)
     {
     case Renderer::FuzzyPointStars:
-        lua_pushstring(l, "fuzzy"); break;
+        lua_pushstring(l, "fuzzy");
+        break;
     case Renderer::PointStars:
-        lua_pushstring(l, "point"); break;
+        lua_pushstring(l, "point");
+        break;
     case Renderer::ScaledDiscStars:
-        lua_pushstring(l, "disc"); break;
+        lua_pushstring(l, "disc");
+        break;
     default:
         lua_pushstring(l, "invalid starstyle");
     };
     return 1;
 }
 
-static int celestia_setstarstyle(lua_State* l)
+static int
+celestia_setstarstyle(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected in celestia:setstarstyle");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    string starStyle = Celx_SafeGetString(l, 2, AllErrors, "Argument to celestia:setstarstyle must be a string");
-    Renderer* renderer = appCore->getRenderer();
+    string starStyle
+        = Celx_SafeGetString(l, 2, AllErrors, "Argument to celestia:setstarstyle must be a string");
+    Renderer *renderer = appCore->getRenderer();
     if (renderer == nullptr)
     {
         Celx_DoError(l, "Internal Error: renderer is nullptr!");
@@ -1697,7 +1998,7 @@ static int celestia_setstarstyle(lua_State* l)
     else if (starStyle == "disc")
         renderer->setStarStyle(Renderer::ScaledDiscStars);
     else
-       Celx_DoError(l, "Invalid starstyle");
+        Celx_DoError(l, "Invalid starstyle");
 
     appCore->notifyWatchers(CelestiaCore::RenderFlagsChanged);
     return 0;
@@ -1706,12 +2007,13 @@ static int celestia_setstarstyle(lua_State* l)
 // -----------------------------------------------------------------------------
 // Star Color
 
-static int celestia_getstarcolor(lua_State* l)
+static int
+celestia_getstarcolor(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No argument expected in celestia:getstarcolor");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    Renderer* renderer = appCore->getRenderer();
+    Renderer *renderer = appCore->getRenderer();
     if (renderer == nullptr)
     {
         Celx_DoError(l, "Internal Error: renderer is nullptr!");
@@ -1740,13 +2042,15 @@ static int celestia_getstarcolor(lua_State* l)
     return 1;
 }
 
-static int celestia_setstarcolor(lua_State* l)
+static int
+celestia_setstarcolor(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected in celestia:setstarcolor");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    string starColor = Celx_SafeGetString(l, 2, AllErrors, "Argument to celestia:setstarcolor must be a string");
-    Renderer* renderer = appCore->getRenderer();
+    string starColor
+        = Celx_SafeGetString(l, 2, AllErrors, "Argument to celestia:setstarcolor must be a string");
+    Renderer *renderer = appCore->getRenderer();
     if (renderer == nullptr)
     {
         Celx_DoError(l, "Internal Error: renderer is nullptr!");
@@ -1770,12 +2074,13 @@ static int celestia_setstarcolor(lua_State* l)
 
 // -----------------------------------------------------------------------------
 
-static int celestia_gettextureresolution(lua_State* l)
+static int
+celestia_gettextureresolution(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No argument expected in celestia:gettextureresolution");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    Renderer* renderer = appCore->getRenderer();
+    Renderer *renderer = appCore->getRenderer();
     if (renderer == nullptr)
     {
         Celx_DoError(l, "Internal Error: renderer is nullptr!");
@@ -1787,13 +2092,18 @@ static int celestia_gettextureresolution(lua_State* l)
     return 1;
 }
 
-static int celestia_settextureresolution(lua_State* l)
+static int
+celestia_settextureresolution(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected in celestia:settextureresolution");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    unsigned int textureRes = (unsigned int) Celx_SafeGetNumber(l, 2, AllErrors, "Argument to celestia:settextureresolution must be a number");
-    Renderer* renderer = appCore->getRenderer();
+    unsigned int textureRes = (unsigned int)Celx_SafeGetNumber(
+        l,
+        2,
+        AllErrors,
+        "Argument to celestia:settextureresolution must be a number");
+    Renderer *renderer = appCore->getRenderer();
     if (renderer == nullptr)
     {
         Celx_DoError(l, "Internal Error: renderer is nullptr!");
@@ -1806,14 +2116,16 @@ static int celestia_settextureresolution(lua_State* l)
     return 0;
 }
 
-static int celestia_getstar(lua_State* l)
+static int
+celestia_getstar(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected to function celestia:getstar");
 
-    CelestiaCore* appCore = this_celestia(l);
-    double starIndex = Celx_SafeGetNumber(l, 2, AllErrors, "First arg to celestia:getstar must be a number");
-    Universe* u = appCore->getSimulation()->getUniverse();
-    Star* star = u->getStarCatalog()->find((uint32_t) starIndex);
+    CelestiaCore *appCore = this_celestia(l);
+    double        starIndex
+        = Celx_SafeGetNumber(l, 2, AllErrors, "First arg to celestia:getstar must be a number");
+    Universe *u    = appCore->getSimulation()->getUniverse();
+    Star     *star = u->getStarCatalog()->find((uint32_t)starIndex);
     if (star == nullptr)
         lua_pushnil(l);
     else
@@ -1822,14 +2134,16 @@ static int celestia_getstar(lua_State* l)
     return 1;
 }
 
-static int celestia_getdso(lua_State* l)
+static int
+celestia_getdso(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected to function celestia:getdso");
 
-    CelestiaCore* appCore = this_celestia(l);
-    double dsoIndex = Celx_SafeGetNumber(l, 2, AllErrors, "First arg to celestia:getdso must be a number");
-    Universe* u = appCore->getSimulation()->getUniverse();
-    DeepSkyObject* dso = u->getDSOCatalog()->find((uint32_t) dsoIndex);
+    CelestiaCore *appCore = this_celestia(l);
+    double        dsoIndex
+        = Celx_SafeGetNumber(l, 2, AllErrors, "First arg to celestia:getdso must be a number");
+    Universe      *u   = appCore->getSimulation()->getUniverse();
+    DeepSkyObject *dso = u->getDSOCatalog()->find((uint32_t)dsoIndex);
     if (dso == nullptr)
         lua_pushnil(l);
     else
@@ -1838,22 +2152,26 @@ static int celestia_getdso(lua_State* l)
     return 1;
 }
 
-
-static int celestia_newvector(lua_State* l)
+static int
+celestia_newvector(lua_State *l)
 {
     Celx_CheckArgs(l, 4, 4, "Expected 3 arguments for celestia:newvector");
     // for error checking only:
     this_celestia(l);
-    double x = Celx_SafeGetNumber(l, 2, AllErrors, "First arg to celestia:newvector must be a number");
-    double y = Celx_SafeGetNumber(l, 3, AllErrors, "Second arg to celestia:newvector must be a number");
-    double z = Celx_SafeGetNumber(l, 4, AllErrors, "Third arg to celestia:newvector must be a number");
+    double x
+        = Celx_SafeGetNumber(l, 2, AllErrors, "First arg to celestia:newvector must be a number");
+    double y
+        = Celx_SafeGetNumber(l, 3, AllErrors, "Second arg to celestia:newvector must be a number");
+    double z
+        = Celx_SafeGetNumber(l, 4, AllErrors, "Third arg to celestia:newvector must be a number");
 
-    vector_new(l, Vector3d(x,y,z));
+    vector_new(l, Vector3d(x, y, z));
 
     return 1;
 }
 
-static int celestia_newposition(lua_State* l)
+static int
+celestia_newposition(lua_State *l)
 {
     Celx_CheckArgs(l, 4, 4, "Expected 3 arguments for celestia:newposition");
     // for error checking only:
@@ -1861,14 +2179,14 @@ static int celestia_newposition(lua_State* l)
     R128 components[3];
     for (int i = 0; i < 3; i++)
     {
-        if (lua_isnumber(l, i+2))
+        if (lua_isnumber(l, i + 2))
         {
-            double v = lua_tonumber(l, i+2);
+            double v      = lua_tonumber(l, i + 2);
             components[i] = R128(v);
         }
-        else if (lua_isstring(l, i+2))
+        else if (lua_isstring(l, i + 2))
         {
-            components[i] = celestia::util::DecodeFromBase64(lua_tostring(l, i+2));
+            components[i] = celestia::util::DecodeFromBase64(lua_tostring(l, i + 2));
         }
         else
         {
@@ -1882,7 +2200,8 @@ static int celestia_newposition(lua_State* l)
     return 1;
 }
 
-static int celestia_newrotation(lua_State* l)
+static int
+celestia_newrotation(lua_State *l)
 {
     Celx_CheckArgs(l, 3, 5, "Need 2 or 4 arguments for celestia:newrotation");
     // for error checking only:
@@ -1891,10 +2210,26 @@ static int celestia_newrotation(lua_State* l)
     if (lua_gettop(l) > 3)
     {
         // if (lua_gettop == 4), Celx_SafeGetNumber will catch the error
-        double w = Celx_SafeGetNumber(l, 2, AllErrors, "arguments to celestia:newrotation must either be (vec, number) or four numbers");
-        double x = Celx_SafeGetNumber(l, 3, AllErrors, "arguments to celestia:newrotation must either be (vec, number) or four numbers");
-        double y = Celx_SafeGetNumber(l, 4, AllErrors, "arguments to celestia:newrotation must either be (vec, number) or four numbers");
-        double z = Celx_SafeGetNumber(l, 5, AllErrors, "arguments to celestia:newrotation must either be (vec, number) or four numbers");
+        double w = Celx_SafeGetNumber(
+            l,
+            2,
+            AllErrors,
+            "arguments to celestia:newrotation must either be (vec, number) or four numbers");
+        double x = Celx_SafeGetNumber(
+            l,
+            3,
+            AllErrors,
+            "arguments to celestia:newrotation must either be (vec, number) or four numbers");
+        double y = Celx_SafeGetNumber(
+            l,
+            4,
+            AllErrors,
+            "arguments to celestia:newrotation must either be (vec, number) or four numbers");
+        double z = Celx_SafeGetNumber(
+            l,
+            5,
+            AllErrors,
+            "arguments to celestia:newrotation must either be (vec, number) or four numbers");
         Quaterniond q(w, x, y, z);
         rotation_new(l, q);
     }
@@ -1906,25 +2241,31 @@ static int celestia_newrotation(lua_State* l)
             Celx_DoError(l, "newrotation: first argument must be a vector");
             return 0;
         }
-        double angle = Celx_SafeGetNumber(l, 3, AllErrors, "second argument to celestia:newrotation must be a number");
+        double angle = Celx_SafeGetNumber(
+            l,
+            3,
+            AllErrors,
+            "second argument to celestia:newrotation must be a number");
         Quaterniond q(AngleAxisd(angle, v->normalized()));
         rotation_new(l, q);
     }
     return 1;
 }
 
-static int celestia_getscripttime(lua_State* l)
+static int
+celestia_getscripttime(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No arguments expected for celestia:getscripttime");
     // for error checking only:
     this_celestia(l);
 
-    LuaState* luastate_ptr = getLuaStateObject(l);
+    LuaState *luastate_ptr = getLuaStateObject(l);
     lua_pushnumber(l, luastate_ptr->getTime());
     return 1;
 }
 
-static int celestia_newframe(lua_State* l)
+static int
+celestia_newframe(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 4, "One to three arguments expected for function celestia:newframe");
     int argc = lua_gettop(l);
@@ -1932,10 +2273,11 @@ static int celestia_newframe(lua_State* l)
     // for error checking only:
     this_celestia(l);
 
-    const char* coordsysName = Celx_SafeGetString(l, 2, AllErrors, "newframe: first argument must be a string");
+    const char *coordsysName
+        = Celx_SafeGetString(l, 2, AllErrors, "newframe: first argument must be a string");
     ObserverFrame::CoordinateSystem coordSys = parseCoordSys(coordsysName);
-    Selection* ref = nullptr;
-    Selection* target = nullptr;
+    Selection                      *ref      = nullptr;
+    Selection                      *target   = nullptr;
 
     if (coordSys == ObserverFrame::Universal)
     {
@@ -1945,7 +2287,7 @@ static int celestia_newframe(lua_State* l)
     {
         if (argc >= 4)
         {
-            ref = to_object(l, 3);
+            ref    = to_object(l, 3);
             target = to_object(l, 4);
         }
 
@@ -1973,10 +2315,11 @@ static int celestia_newframe(lua_State* l)
     return 1;
 }
 
-static int celestia_requestkeyboard(lua_State* l)
+static int
+celestia_requestkeyboard(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "Need one arguments for celestia:requestkeyboard");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
     if (!lua_isboolean(l, 2))
     {
@@ -2007,10 +2350,11 @@ static int celestia_requestkeyboard(lua_State* l)
     return 0;
 }
 
-static int celestia_registereventhandler(lua_State* l)
+static int
+celestia_registereventhandler(lua_State *l)
 {
     Celx_CheckArgs(l, 3, 3, "Two arguments required for celestia:registereventhandler");
-    //CelestiaCore* appCore = this_celestia(l);
+    // CelestiaCore* appCore = this_celestia(l);
 
     if (!lua_isstring(l, 2))
     {
@@ -2020,7 +2364,9 @@ static int celestia_registereventhandler(lua_State* l)
 
     if (!lua_isfunction(l, 3) && !lua_isnil(l, 3))
     {
-        Celx_DoError(l, "Second argument for celestia:registereventhandler must be a function or nil");
+        Celx_DoError(
+            l,
+            "Second argument for celestia:registereventhandler must be a function or nil");
         return 0;
     }
 
@@ -2042,10 +2388,11 @@ static int celestia_registereventhandler(lua_State* l)
     return 0;
 }
 
-static int celestia_geteventhandler(lua_State* l)
+static int
+celestia_geteventhandler(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected for celestia:registereventhandler");
-    //CelestiaCore* appCore = this_celestia(l);
+    // CelestiaCore* appCore = this_celestia(l);
 
     if (!lua_isstring(l, 2))
     {
@@ -2069,31 +2416,42 @@ static int celestia_geteventhandler(lua_State* l)
     return 1;
 }
 
-static int celestia_takescreenshot(lua_State* l)
+static int
+celestia_takescreenshot(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 3, "Need 0 to 2 arguments for celestia:takescreenshot");
-    CelestiaCore* appCore = this_celestia(l);
-    LuaState* luastate = getLuaStateObject(l);
+    CelestiaCore *appCore  = this_celestia(l);
+    LuaState     *luastate = getLuaStateObject(l);
     // make sure we don't timeout because of taking a screenshot:
     double timeToTimeout = luastate->timeout - luastate->getTime();
 
-    const char* filetype = Celx_SafeGetString(l, 2, WrongType, "First argument to celestia:takescreenshot must be a string");
+    const char *filetype = Celx_SafeGetString(
+        l,
+        2,
+        WrongType,
+        "First argument to celestia:takescreenshot must be a string");
     if (filetype == nullptr)
         filetype = "png";
 
     // Let the script safely contribute one part of the filename:
-    const char* fileid_ptr = Celx_SafeGetString(l, 3, WrongType, "Second argument to celestia:takescreenshot must be a string");
+    const char *fileid_ptr = Celx_SafeGetString(
+        l,
+        3,
+        WrongType,
+        "Second argument to celestia:takescreenshot must be a string");
     if (fileid_ptr == nullptr)
         fileid_ptr = "";
     string fileid(fileid_ptr);
+
+    // VTS //
+    string vtsFileid(fileid_ptr);
 
     // be paranoid about the fileid, make sure it only contains 'A-Za-z0-9_':
     for (unsigned int i = 0; i < fileid.length(); i++)
     {
         char ch = fileid[i];
-        if (!((ch >= 'a' && ch <= 'z') ||
-              (fileid[i] >= 'A' && ch <= 'Z') ||
-              (ch >= '0' && ch <= '9') ) )
+        if (!((ch >= 'a' && ch <= 'z') || (fileid[i] >= 'A' && ch <= 'Z')
+              || (ch >= '0' && ch <= '9')))
             fileid[i] = '_';
     }
     // limit length of string
@@ -2103,13 +2461,13 @@ static int celestia_takescreenshot(lua_State* l)
         fileid.append("-");
 
     luastate->screenshotCount++;
-    bool success = false;
+    bool   success = false;
     string filenamestem;
     filenamestem = fmt::format("screenshot-{}{:06i}", fileid, luastate->screenshotCount);
 
-    fs::path path = appCore->getConfig()->paths.scriptScreenshotDirectory;
+    fs::path path     = appCore->getConfig()->paths.scriptScreenshotDirectory;
     fs::path filepath = path / fmt::format("{}.{}", filenamestem, filetype);
-    success = appCore->saveScreenShot(filepath);
+    success           = appCore->saveScreenShot(filepath);
     lua_pushboolean(l, success);
 
     // no matter how long it really took, make it look like 0.1s to timeout check:
@@ -2117,24 +2475,31 @@ static int celestia_takescreenshot(lua_State* l)
     return 1;
 }
 
-static int celestia_createcelscript(lua_State* l)
+static int
+celestia_createcelscript(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "Need one argument for celestia:createcelscript()");
-    string scripttext = Celx_SafeGetString(l, 2, AllErrors, "Argument to celestia:createcelscript() must be a string");
+    string scripttext = Celx_SafeGetString(
+        l,
+        2,
+        AllErrors,
+        "Argument to celestia:createcelscript() must be a string");
     return celscript_from_string(l, scripttext);
 }
 
-static int celestia_requestsystemaccess(lua_State* l)
+static int
+celestia_requestsystemaccess(lua_State *l)
 {
     // ignore possible argument for future extensions
     Celx_CheckArgs(l, 1, 2, "No argument expected for celestia:requestsystemaccess()");
     this_celestia(l);
-    LuaState* luastate = getLuaStateObject(l);
+    LuaState *luastate = getLuaStateObject(l);
     luastate->requestIO();
     return 0;
 }
 
-static int celestia_getscriptpath(lua_State* l)
+static int
+celestia_getscriptpath(lua_State *l)
 {
     // ignore possible argument for future extensions
     Celx_CheckArgs(l, 1, 1, "No argument expected for celestia:getscriptpath()");
@@ -2144,55 +2509,67 @@ static int celestia_getscriptpath(lua_State* l)
     return 1;
 }
 
-static int celestia_runscript(lua_State* l)
+static int
+celestia_runscript(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected for celestia:runscript");
-    string scriptfile = Celx_SafeGetString(l, 2, AllErrors, "Argument to celestia:runscript must be a string");
+    string scriptfile
+        = Celx_SafeGetString(l, 2, AllErrors, "Argument to celestia:runscript must be a string");
 
-    fs::path base_dir = GetScriptPath(l);
-    CelestiaCore* appCore = this_celestia(l);
+    fs::path      base_dir = GetScriptPath(l);
+    CelestiaCore *appCore  = this_celestia(l);
     appCore->runScript(base_dir / scriptfile);
     return 0;
 }
 
-static int celestia_tostring(lua_State* l)
+static int
+celestia_tostring(lua_State *l)
 {
     lua_pushstring(l, "[Celestia]");
 
     return 1;
 }
 
-static int celestia_windowbordersvisible(lua_State* l)
+static int
+celestia_windowbordersvisible(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 1, "No argument expected for celestia:windowbordersvisible");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
     lua_pushboolean(l, appCore->getFramesVisible());
 
     return 1;
 }
 
-static int celestia_setwindowbordersvisible(lua_State* l)
+static int
+celestia_setwindowbordersvisible(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected for celestia:windowbordersvisible");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    bool visible = Celx_SafeGetBoolean(l, 2, AllErrors, "Argument to celestia:setwindowbordersvisible must be a boolean", true);
+    bool visible = Celx_SafeGetBoolean(
+        l,
+        2,
+        AllErrors,
+        "Argument to celestia:setwindowbordersvisible must be a boolean",
+        true);
     appCore->setFramesVisible(visible);
 
     return 0;
 }
 
-static int celestia_seturl(lua_State* l)
+static int
+celestia_seturl(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 3, "One or two arguments expected for celestia:seturl");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    string url = Celx_SafeGetString(l, 2, AllErrors, "First argument to celestia:seturl must be a string");
-    Observer* obs = to_observer(l, 3);
+    string url
+        = Celx_SafeGetString(l, 2, AllErrors, "First argument to celestia:seturl must be a string");
+    Observer *obs = to_observer(l, 3);
     if (obs == nullptr)
         obs = appCore->getSimulation()->getActiveObserver();
-    View* view = getViewByObserver(appCore, obs);
+    View *view = getViewByObserver(appCore, obs);
     appCore->setActiveView(view);
 
     appCore->goToUrl(url);
@@ -2200,15 +2577,16 @@ static int celestia_seturl(lua_State* l)
     return 0;
 }
 
-static int celestia_geturl(lua_State* l)
+static int
+celestia_geturl(lua_State *l)
 {
     Celx_CheckArgs(l, 1, 2, "None or one argument expected for celestia:geturl");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
-    Observer* obs = to_observer(l, 2);
+    Observer *obs = to_observer(l, 2);
     if (obs == nullptr)
         obs = appCore->getSimulation()->getActiveObserver();
-    View* view = getViewByObserver(appCore, obs);
+    View *view = getViewByObserver(appCore, obs);
     appCore->setActiveView(view);
 
     CelestiaState appState(appCore);
@@ -2220,28 +2598,120 @@ static int celestia_geturl(lua_State* l)
     return 1;
 }
 
+static int
+celestia_setwindowmenuvisible(lua_State *l)
+{
+    Celx_CheckArgs(l, 2, 2, "One argument expected for celestia:setwindowmenuvisible");
 
-static int celestia_overlay(lua_State* l)
+    CelestiaCore *appCore = this_celestia(l);
+
+    bool visible = Celx_SafeGetBoolean(
+        l,
+        2,
+        AllErrors,
+        "Argument to celestia:setwindowmenuvisible must be a boolean",
+        true);
+
+#ifdef _WIN32
+    if (visible)
+    {
+        SetMenu(mainWindow, menuBar);
+    }
+    else
+    {
+        SetMenu(mainWindow, nullptr);
+    }
+    hideMenuBar = visible;
+#else
+    CelestiaAppWindow *appWindow = appCore->getAppWindow();
+    appWindow->menuBar()->setVisible(visible);
+#endif
+    return 0;
+}
+
+static int
+celestia_setsensorswathresolution(lua_State *l)
+{
+    Celx_CheckArgs(l, 2, 2, "One argument expected to celestia:setsensorswathresolution()");
+
+    // Update Celestia Config
+    Footprint::s_sensorHighRes = Celx_SafeGetNumber(
+        l,
+        2,
+        WrongType,
+        "Argument to celestia:setsensorswathresolution() must be a number",
+        Footprint::s_sensorHighRes);
+
+    return 0;
+}
+
+static int
+celestia_setsensorgeometrysegmentnumber(lua_State *l)
+{
+    Celx_CheckArgs(l, 2, 2, "One argument expected to celestia:setsensorgeometrysegmentnumber()");
+
+    // Update Celestia Config
+    SensorGeometry::s_sectionCount = (unsigned int)Celx_SafeGetNumber(
+        l,
+        2,
+        WrongType,
+        "Argument to celestia:setsensorgeometrysegmentnumber() must be a number",
+        SensorGeometry::s_sectionCount);
+
+    return 0;
+}
+
+static int
+celestia_overlay(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 7, "One to Six arguments expected to function celestia:overlay");
 
-    CelestiaCore* appCore = this_celestia(l);
-    float duration = Celx_SafeGetNumber(l, 2, WrongType, "First argument to celestia:overlay must be a number (duration)", 3.0);
-    float xoffset = Celx_SafeGetNumber(l, 3, WrongType, "Second argument to celestia:overlay must be a number (xoffset)", 0.0);
-    float yoffset = Celx_SafeGetNumber(l, 4, WrongType, "Third argument to celestia:overlay must be a number (yoffset)", 0.0);
-    float alpha = Celx_SafeGetNumber(l, 5, WrongType, "Fourth argument to celestia:overlay must be a number (alpha)", 1.0);
-    const char* filename = Celx_SafeGetString(l, 6, AllErrors, "Fifth argument to celestia:overlay must be a string (filename)");
+    CelestiaCore *appCore  = this_celestia(l);
+    float         duration = Celx_SafeGetNumber(
+        l,
+        2,
+        WrongType,
+        "First argument to celestia:overlay must be a number (duration)",
+        3.0);
+    float xoffset = Celx_SafeGetNumber(
+        l,
+        3,
+        WrongType,
+        "Second argument to celestia:overlay must be a number (xoffset)",
+        0.0);
+    float yoffset = Celx_SafeGetNumber(
+        l,
+        4,
+        WrongType,
+        "Third argument to celestia:overlay must be a number (yoffset)",
+        0.0);
+    float alpha = Celx_SafeGetNumber(
+        l,
+        5,
+        WrongType,
+        "Fourth argument to celestia:overlay must be a number (alpha)",
+        1.0);
+    const char *filename = Celx_SafeGetString(
+        l,
+        6,
+        AllErrors,
+        "Fifth argument to celestia:overlay must be a string (filename)");
     bool fitscreen;
     if (lua_isboolean(l, 7))
         fitscreen = lua_toboolean(l, 7);
     else
-        fitscreen = (bool) Celx_SafeGetNumber(l, 7, WrongType, "Sixth argument to celestia:overlay must be a number or a boolean(fitscreen)", 0);
+        fitscreen = (bool)Celx_SafeGetNumber(
+            l,
+            7,
+            WrongType,
+            "Sixth argument to celestia:overlay must be a number or a boolean(fitscreen)",
+            0);
 
     auto image = unique_ptr<OverlayImage>(new OverlayImage(filename, appCore->getRenderer()));
     image->setDuration(duration);
     image->setFadeAfter(duration); // FIXME
     image->setOffset(xoffset, yoffset);
-    image->setColor({Color::White, alpha}); // FIXME
+    image->setColor({ Color::White, alpha }); // FIXME
     image->fitScreen(fitscreen);
 
     appCore->setScriptImage(std::move(image));
@@ -2249,21 +2719,27 @@ static int celestia_overlay(lua_State* l)
     return 0;
 }
 
-static int celestia_verbosity(lua_State* l)
+static int
+celestia_verbosity(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected to function celestia:verbosity");
 
-    CelestiaCore* appCore = this_celestia(l);
-    int level = Celx_SafeGetNumber(l, 2, WrongType, "First argument to celestia:verbosity must be a number (level)", 2.0);
+    CelestiaCore *appCore = this_celestia(l);
+    int           level   = Celx_SafeGetNumber(
+        l,
+        2,
+        WrongType,
+        "First argument to celestia:verbosity must be a number (level)",
+        2.0);
 
     appCore->setHudDetail(level);
 
     return 0;
 }
 
-
 #ifdef USE_MINIAUDIO
-static std::optional<int> celestia_getchannel(lua_State *l, const std::string &method)
+static std::optional<int>
+celestia_getchannel(lua_State *l, const std::string &method)
 {
     string errorMessage = fmt::format("First argument for celestia:{} must be a number", method);
     if (!lua_isnumber(l, 2))
@@ -2271,11 +2747,19 @@ static std::optional<int> celestia_getchannel(lua_State *l, const std::string &m
         Celx_DoError(l, errorMessage.c_str());
         return nullopt;
     }
-    return max(static_cast<int>(Celx_SafeGetNumber(l, 2, AllErrors, errorMessage.c_str(), static_cast<lua_Number>(defaultAudioChannel))), minAudioChannel);
+    return max(
+        static_cast<int>(Celx_SafeGetNumber(
+            l,
+            2,
+            AllErrors,
+            errorMessage.c_str(),
+            static_cast<lua_Number>(defaultAudioChannel))),
+        minAudioChannel);
 }
 #endif
 
-static int celestia_play(lua_State *l)
+static int
+celestia_play(lua_State *l)
 {
 #ifdef USE_MINIAUDIO
     Celx_CheckArgs(l, 3, 7, "Two to six arguments expected to function celestia:play");
@@ -2283,14 +2767,44 @@ static int celestia_play(lua_State *l)
     if (!optionalChannel.has_value())
         return 0;
 
-    CelestiaCore* appCore = this_celestia(l);
-    auto channel = optionalChannel.value();
-    auto volume = static_cast<float>(Celx_SafeGetNumber(l, 3, AllErrors, "Second argument to celestia:play must be a number (volume)", static_cast<lua_Number>(defaultAudioVolume)));
-    float pan = clamp(static_cast<float>(Celx_SafeGetNumber(l, 4, WrongType, "Third argument to celestia:play must be a number (pan)", static_cast<lua_Number>(defaultAudioPan))), minAudioPan, maxAudioPan);
+    CelestiaCore *appCore = this_celestia(l);
+    auto          channel = optionalChannel.value();
+    auto          volume  = static_cast<float>(Celx_SafeGetNumber(
+        l,
+        3,
+        AllErrors,
+        "Second argument to celestia:play must be a number (volume)",
+        static_cast<lua_Number>(defaultAudioVolume)));
+    float         pan     = clamp(
+        static_cast<float>(Celx_SafeGetNumber(
+            l,
+            4,
+            WrongType,
+            "Third argument to celestia:play must be a number (pan)",
+            static_cast<lua_Number>(defaultAudioPan))),
+        minAudioPan,
+        maxAudioPan);
     bool loopSet = !lua_isnil(l, 5) && lua_isnumber(l, 5);
-    bool loop = loopSet && static_cast<int>(Celx_SafeGetNumber(l, 5, WrongType, "Fourth argument to celestia:play must be a number (loop)", 0.0)) == 1;
-    const char* filename = Celx_SafeGetString(l, 6, WrongType, "Fifth argument to celestia:play must be a string (filename)");
-    bool nopause = static_cast<int>(Celx_SafeGetNumber(l, 7, WrongType, "Sixth argument to celestia:play must be a number (nopause)", 0.0)) == 1;
+    bool loop    = loopSet
+                && static_cast<int>(Celx_SafeGetNumber(
+                       l,
+                       5,
+                       WrongType,
+                       "Fourth argument to celestia:play must be a number (loop)",
+                       0.0))
+                       == 1;
+    const char *filename = Celx_SafeGetString(
+        l,
+        6,
+        WrongType,
+        "Fifth argument to celestia:play must be a string (filename)");
+    bool nopause = static_cast<int>(Celx_SafeGetNumber(
+                       l,
+                       7,
+                       WrongType,
+                       "Sixth argument to celestia:play must be a number (nopause)",
+                       0.0))
+                   == 1;
 
     if (!filename)
     {
@@ -2307,7 +2821,14 @@ static int celestia_play(lua_State *l)
     }
     else
     {
-        appCore->playAudio(channel, filename, 0.0, clamp(volume, minAudioVolume, maxAudioVolume), pan, loop, nopause);
+        appCore->playAudio(
+            channel,
+            filename,
+            0.0,
+            clamp(volume, minAudioVolume, maxAudioVolume),
+            pan,
+            loop,
+            nopause);
     }
 #else
     Celx_DoError(l, "Audio playback is not supported");
@@ -2315,7 +2836,8 @@ static int celestia_play(lua_State *l)
     return 0;
 }
 
-static int celestia_isplayingaudio(lua_State* l)
+static int
+celestia_isplayingaudio(lua_State *l)
 {
 #ifdef USE_MINIAUDIO
     Celx_CheckArgs(l, 2, 2, "Function celestia:isplayingaudio requires one argument");
@@ -2326,8 +2848,8 @@ static int celestia_isplayingaudio(lua_State* l)
         return 1;
     }
 
-    int channel = optionalChannel.value();
-    CelestiaCore* appCore = this_celestia(l);
+    int           channel = optionalChannel.value();
+    CelestiaCore *appCore = this_celestia(l);
     lua_pushboolean(l, appCore->isPlayingAudio(channel));
 #else
     Celx_DoError(l, "Audio playback is not supported");
@@ -2336,7 +2858,8 @@ static int celestia_isplayingaudio(lua_State* l)
     return 1;
 }
 
-static int celestia_playaudio(lua_State* l)
+static int
+celestia_playaudio(lua_State *l)
 {
 #ifdef USE_MINIAUDIO
     Celx_CheckArgs(l, 3, 7, "Function celestia:playaudio requires two to seven arguments");
@@ -2348,19 +2871,56 @@ static int celestia_playaudio(lua_State* l)
     }
     int channel = optionalChannel.value();
 
-    const char* path = Celx_SafeGetString(l, 3, AllErrors, "Second argument to celestia:playaudio must be a string");
+    const char *path = Celx_SafeGetString(
+        l,
+        3,
+        AllErrors,
+        "Second argument to celestia:playaudio must be a string");
     if (path == nullptr)
     {
         lua_pushboolean(l, false);
         return 1;
     }
 
-    double startTime = max(Celx_SafeGetNumber(l, 4, WrongType, "Third argument to celestia:playaudio must be a number", 0.0), 0.0);
-    float volume = clamp(static_cast<float>(Celx_SafeGetNumber(l, 5, WrongType, "Fourth argument to celestia:playaudio must be a number", static_cast<lua_Number>(defaultAudioVolume))), minAudioVolume, maxAudioVolume);
-    float pan = clamp(static_cast<float>(Celx_SafeGetNumber(l, 6, WrongType, "Fifth argument to celestia:playaudio must be a number", static_cast<lua_Number>(defaultAudioPan))), minAudioPan, maxAudioPan);
-    bool loop = Celx_SafeGetBoolean(l, 7, WrongType, "Sixth argument to celestia:playaudio must be a boolean", false);
-    bool nopause = Celx_SafeGetBoolean(l, 7, WrongType, "Seventh argument to celestia:playaudio must be a number(nopause)", false);
-    CelestiaCore* appCore = this_celestia(l);
+    double startTime = max(
+        Celx_SafeGetNumber(
+            l,
+            4,
+            WrongType,
+            "Third argument to celestia:playaudio must be a number",
+            0.0),
+        0.0);
+    float volume = clamp(
+        static_cast<float>(Celx_SafeGetNumber(
+            l,
+            5,
+            WrongType,
+            "Fourth argument to celestia:playaudio must be a number",
+            static_cast<lua_Number>(defaultAudioVolume))),
+        minAudioVolume,
+        maxAudioVolume);
+    float pan = clamp(
+        static_cast<float>(Celx_SafeGetNumber(
+            l,
+            6,
+            WrongType,
+            "Fifth argument to celestia:playaudio must be a number",
+            static_cast<lua_Number>(defaultAudioPan))),
+        minAudioPan,
+        maxAudioPan);
+    bool loop = Celx_SafeGetBoolean(
+        l,
+        7,
+        WrongType,
+        "Sixth argument to celestia:playaudio must be a boolean",
+        false);
+    bool nopause = Celx_SafeGetBoolean(
+        l,
+        7,
+        WrongType,
+        "Seventh argument to celestia:playaudio must be a number(nopause)",
+        false);
+    CelestiaCore *appCore = this_celestia(l);
     lua_pushboolean(l, appCore->playAudio(channel, path, startTime, volume, pan, loop, nopause));
 #else
     Celx_DoError(l, "Audio playback is not supported");
@@ -2369,7 +2929,8 @@ static int celestia_playaudio(lua_State* l)
     return 1;
 }
 
-static int celestia_resumeaudio(lua_State* l)
+static int
+celestia_resumeaudio(lua_State *l)
 {
 #ifdef USE_MINIAUDIO
     Celx_CheckArgs(l, 2, 2, "Function celestia:resumeaudio requires one argument");
@@ -2381,7 +2942,7 @@ static int celestia_resumeaudio(lua_State* l)
     }
     int channel = optionalChannel.value();
 
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     lua_pushboolean(l, appCore->resumeAudio(channel));
 #else
     Celx_DoError(l, "Audio playback is not supported");
@@ -2390,7 +2951,8 @@ static int celestia_resumeaudio(lua_State* l)
     return 1;
 }
 
-static int celestia_pauseaudio(lua_State* l)
+static int
+celestia_pauseaudio(lua_State *l)
 {
 #ifdef USE_MINIAUDIO
     Celx_CheckArgs(l, 2, 2, "Function celestia:pauseaudio requires one argument");
@@ -2399,7 +2961,7 @@ static int celestia_pauseaudio(lua_State* l)
         return 0;
     int channel = optionalChannel.value();
 
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     appCore->pauseAudio(channel);
 #else
     Celx_DoError(l, "Audio playback is not supported");
@@ -2407,7 +2969,8 @@ static int celestia_pauseaudio(lua_State* l)
     return 0;
 }
 
-static int celestia_stopaudio(lua_State* l)
+static int
+celestia_stopaudio(lua_State *l)
 {
 #ifdef USE_MINIAUDIO
     Celx_CheckArgs(l, 2, 2, "Function celestia:stopaudio requires one argument");
@@ -2416,7 +2979,7 @@ static int celestia_stopaudio(lua_State* l)
         return 0;
     int channel = optionalChannel.value();
 
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
     appCore->stopAudio(channel);
 #else
     Celx_DoError(l, "Audio playback is not supported");
@@ -2424,7 +2987,8 @@ static int celestia_stopaudio(lua_State* l)
     return 0;
 }
 
-static int celestia_seekaudio(lua_State* l)
+static int
+celestia_seekaudio(lua_State *l)
 {
 #ifdef USE_MINIAUDIO
     Celx_CheckArgs(l, 3, 3, "Function celestia:seekaudio requires two arguments");
@@ -2443,8 +3007,14 @@ static int celestia_seekaudio(lua_State* l)
         return 1;
     }
 
-    double time = max(Celx_SafeGetNumber(l, 3, AllErrors, "Second argument for celestia:seekaudio must be a number"), 0.0);
-    CelestiaCore* appCore = this_celestia(l);
+    double time = max(
+        Celx_SafeGetNumber(
+            l,
+            3,
+            AllErrors,
+            "Second argument for celestia:seekaudio must be a number"),
+        0.0);
+    CelestiaCore *appCore = this_celestia(l);
     lua_pushboolean(l, appCore->seekAudio(channel, time));
 #else
     Celx_DoError(l, "Audio playback is not supported");
@@ -2453,7 +3023,8 @@ static int celestia_seekaudio(lua_State* l)
     return 1;
 }
 
-static int celestia_setaudiovolume(lua_State* l)
+static int
+celestia_setaudiovolume(lua_State *l)
 {
 #ifdef USE_MINIAUDIO
     Celx_CheckArgs(l, 3, 3, "Function celestia:setaudiovolume requires two arguments");
@@ -2468,8 +3039,16 @@ static int celestia_setaudiovolume(lua_State* l)
         return 0;
     }
 
-    float volume = clamp(static_cast<float>(Celx_SafeGetNumber(l, 3, WrongType, "Second argument for celestia:setaudiovolume must be a number", static_cast<lua_Number>(defaultAudioVolume))), minAudioVolume, maxAudioVolume);
-    CelestiaCore* appCore = this_celestia(l);
+    float volume = clamp(
+        static_cast<float>(Celx_SafeGetNumber(
+            l,
+            3,
+            WrongType,
+            "Second argument for celestia:setaudiovolume must be a number",
+            static_cast<lua_Number>(defaultAudioVolume))),
+        minAudioVolume,
+        maxAudioVolume);
+    CelestiaCore *appCore = this_celestia(l);
     appCore->setAudioVolume(channel, volume);
 #else
     Celx_DoError(l, "Audio playback is not supported");
@@ -2477,7 +3056,8 @@ static int celestia_setaudiovolume(lua_State* l)
     return 0;
 }
 
-static int celestia_setaudiopan(lua_State* l)
+static int
+celestia_setaudiopan(lua_State *l)
 {
 #ifdef USE_MINIAUDIO
     Celx_CheckArgs(l, 3, 3, "Function celestia:setaudiopan requires two arguments");
@@ -2492,8 +3072,16 @@ static int celestia_setaudiopan(lua_State* l)
         return 0;
     }
 
-    float pan = clamp(static_cast<float>(Celx_SafeGetNumber(l, 3, WrongType, "Second argument for celestia:setaudiopan must be a number", static_cast<lua_Number>(defaultAudioPan))), minAudioPan, maxAudioPan);
-    CelestiaCore* appCore = this_celestia(l);
+    float pan = clamp(
+        static_cast<float>(Celx_SafeGetNumber(
+            l,
+            3,
+            WrongType,
+            "Second argument for celestia:setaudiopan must be a number",
+            static_cast<lua_Number>(defaultAudioPan))),
+        minAudioPan,
+        maxAudioPan);
+    CelestiaCore *appCore = this_celestia(l);
     appCore->setAudioPan(channel, pan);
 #else
     Celx_DoError(l, "Audio playback is not supported");
@@ -2501,7 +3089,8 @@ static int celestia_setaudiopan(lua_State* l)
     return 0;
 }
 
-static int celestia_setaudioloop(lua_State* l)
+static int
+celestia_setaudioloop(lua_State *l)
 {
 #ifdef USE_MINIAUDIO
     Celx_CheckArgs(l, 3, 3, "Function celestia:setaudioloop requires two arguments");
@@ -2517,8 +3106,13 @@ static int celestia_setaudioloop(lua_State* l)
         return 0;
     }
 
-    bool loop = Celx_SafeGetBoolean(l, 3, WrongType, "Second argument for celestia:setaudioloop must be a boolean", false);
-    CelestiaCore* appCore = this_celestia(l);
+    bool loop = Celx_SafeGetBoolean(
+        l,
+        3,
+        WrongType,
+        "Second argument for celestia:setaudioloop must be a boolean",
+        false);
+    CelestiaCore *appCore = this_celestia(l);
     appCore->setAudioLoop(channel, loop);
 #else
     Celx_DoError(l, "Audio playback is not supported");
@@ -2526,7 +3120,8 @@ static int celestia_setaudioloop(lua_State* l)
     return 0;
 }
 
-static int celestia_setaudionopause(lua_State* l)
+static int
+celestia_setaudionopause(lua_State *l)
 {
 #ifdef USE_MINIAUDIO
     Celx_CheckArgs(l, 3, 3, "Function celestia:setaudionopause requires two arguments");
@@ -2542,8 +3137,13 @@ static int celestia_setaudionopause(lua_State* l)
         return 0;
     }
 
-    bool nopause = Celx_SafeGetBoolean(l, 3, WrongType, "Second argument for celestia:setaudionopause must be a boolean", false);
-    CelestiaCore* appCore = this_celestia(l);
+    bool nopause = Celx_SafeGetBoolean(
+        l,
+        3,
+        WrongType,
+        "Second argument for celestia:setaudionopause must be a boolean",
+        false);
+    CelestiaCore *appCore = this_celestia(l);
     appCore->setAudioNoPause(channel, nopause);
 #else
     Celx_DoError(l, "Audio playback is not supported");
@@ -2551,13 +3151,15 @@ static int celestia_setaudionopause(lua_State* l)
     return 0;
 }
 
-static int celestia_version(lua_State* l)
+static int
+celestia_version(lua_State *l)
 {
     lua_pushstring(l, VERSION);
     return 1;
 }
 
-void CreateCelestiaMetaTable(lua_State* l)
+void
+CreateCelestiaMetaTable(lua_State *l)
 {
     Celx_CreateClassMetatable(l, Celx_Celestia);
 
@@ -2591,10 +3193,10 @@ void CreateCelestiaMetaTable(lua_State* l)
     Celx_RegisterMethod(l, "setconstellationcolor", celestia_setconstellationcolor);
     Celx_RegisterMethod(l, "setlabelcolor", celestia_setlabelcolor);
     Celx_RegisterMethod(l, "getlabelcolor", celestia_getlabelcolor);
-    Celx_RegisterMethod(l, "setlinecolor",  celestia_setlinecolor);
-    Celx_RegisterMethod(l, "getlinecolor",  celestia_getlinecolor);
-    Celx_RegisterMethod(l, "settextcolor",  celestia_settextcolor);
-    Celx_RegisterMethod(l, "gettextcolor",  celestia_gettextcolor);
+    Celx_RegisterMethod(l, "setlinecolor", celestia_setlinecolor);
+    Celx_RegisterMethod(l, "getlinecolor", celestia_getlinecolor);
+    Celx_RegisterMethod(l, "settextcolor", celestia_settextcolor);
+    Celx_RegisterMethod(l, "gettextcolor", celestia_gettextcolor);
     Celx_RegisterMethod(l, "getoverlayelements", celestia_getoverlayelements);
     Celx_RegisterMethod(l, "setoverlayelements", celestia_setoverlayelements);
     Celx_RegisterMethod(l, "getfaintestvisible", celestia_getfaintestvisible);
@@ -2629,6 +3231,13 @@ void CreateCelestiaMetaTable(lua_State* l)
     Celx_RegisterMethod(l, "setstardistancelimit", celestia_setstardistancelimit);
     Celx_RegisterMethod(l, "getstarstyle", celestia_getstarstyle);
     Celx_RegisterMethod(l, "setstarstyle", celestia_setstarstyle);
+    // VTS //
+    Celx_RegisterMethod(l, "setwindowmenuvisible", celestia_setwindowmenuvisible);
+    Celx_RegisterMethod(l, "setsensorswathresolution", celestia_setsensorswathresolution);
+    Celx_RegisterMethod(
+        l,
+        "setsensorgeometrysegmentnumber",
+        celestia_setsensorgeometrysegmentnumber);
 
     // New CELX command for Star Color
     Celx_RegisterMethod(l, "getstarcolor", celestia_getstarcolor);
@@ -2689,41 +3298,70 @@ void CreateCelestiaMetaTable(lua_State* l)
 
 // ==================== celestia extensions ====================
 
-static int celestia_log(lua_State* l)
+static int
+celestia_log(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected to function celestia:log");
 
-    const char* s = Celx_SafeGetString(l, 2, AllErrors, "First argument to celestia:log must be a string");
-    clog << s << "\n"; clog.flush();
+    const char *s
+        = Celx_SafeGetString(l, 2, AllErrors, "First argument to celestia:log must be a string");
+    clog << s << "\n";
+    clog.flush();
     return 0;
 }
 
-static int celestia_getparamstring(lua_State* l)
+static int
+celestia_getparamstring(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument expected to celestia:getparamstring()");
-    CelestiaCore* appCore = this_celestia(l);
-    const char* s = Celx_SafeGetString(l, 2, AllErrors, "Argument to celestia:getparamstring must be a string");
-    const CelestiaConfig* config = appCore->getConfig();
+    CelestiaCore *appCore = this_celestia(l);
+    const char   *s       = Celx_SafeGetString(
+        l,
+        2,
+        AllErrors,
+        "Argument to celestia:getparamstring must be a string");
+    const CelestiaConfig *config = appCore->getConfig();
     if (auto params = config->configParams.getHash(); params != nullptr)
     {
-        const std::string* paramString = params->getString(s);
+        const std::string *paramString = params->getString(s);
         lua_pushstring(l, paramString == nullptr ? "" : paramString->c_str());
     }
     return 1;
 }
 
-static int celestia_loadtexture(lua_State* l)
+// VTS //
+static int
+celestia_getvtsextradir(lua_State *l)
+{
+    Celx_CheckArgs(l, 1, 1, "No arguments expected to function celestia:getvtsextradir");
+    CelestiaCore *appCore     = this_celestia(l);
+    std::string   paramString = "";
+    auto          config      = appCore->getConfig();
+    paramString = config->paths.extrasDirs.at(config->paths.extrasDirs.size() - 1).string();
+    lua_pushstring(l, paramString.c_str());
+    return 1;
+}
+
+static int
+celestia_loadtexture(lua_State *l)
 {
     CelxLua celx(l);
 
     celx.checkArgs(2, 4, "Need one to three arguments for celestia:loadtexture()");
-    string s = celx.safeGetString(2, AllErrors, "First argument to celestia:loadtexture() must be a string");
-    auto argc = lua_gettop(l);
+    string s = celx.safeGetString(
+        2,
+        AllErrors,
+        "First argument to celestia:loadtexture() must be a string");
+    auto argc        = lua_gettop(l);
     auto addressMode = Texture::AddressMode::EdgeClamp;
-    auto mipMapMode = Texture::MipMapMode::DefaultMipMaps;
+    auto mipMapMode  = Texture::MipMapMode::DefaultMipMaps;
     if (argc >= 3)
     {
-        string addressModeString = Celx_SafeGetString(l, 3, AllErrors, "Second argument to celestia:loadtexture must be a string");
+        string addressModeString = Celx_SafeGetString(
+            l,
+            3,
+            AllErrors,
+            "Second argument to celestia:loadtexture must be a string");
 
         if (addressModeString == "wrap")
             addressMode = Texture::AddressMode::Wrap;
@@ -2732,77 +3370,89 @@ static int celestia_loadtexture(lua_State* l)
         else if (addressModeString == "edgeclamp")
             addressMode = Texture::AddressMode::EdgeClamp;
         else
-           Celx_DoError(l, "Invalid addressMode");
+            Celx_DoError(l, "Invalid addressMode");
     }
     if (argc >= 4)
     {
-        string mipMapModeString = Celx_SafeGetString(l, 4, AllErrors, "Third argument to celestia:loadtexture must be a string");
+        string mipMapModeString = Celx_SafeGetString(
+            l,
+            4,
+            AllErrors,
+            "Third argument to celestia:loadtexture must be a string");
 
         if (mipMapModeString == "default")
             mipMapMode = Texture::MipMapMode::DefaultMipMaps;
         else if (mipMapModeString == "none")
             mipMapMode = Texture::MipMapMode::NoMipMaps;
         else
-           Celx_DoError(l, "Invalid mipMapMode");
+            Celx_DoError(l, "Invalid mipMapMode");
     }
     fs::path base_dir = GetScriptPath(l);
-    Texture* t = LoadTextureFromFile(base_dir / s, addressMode, mipMapMode).release();
-    if (t == nullptr) return 0;
+    Texture *t        = LoadTextureFromFile(base_dir / s, addressMode, mipMapMode).release();
+    if (t == nullptr)
+        return 0;
     return celx.pushClass(t);
 }
 
-static int celestia_loadfont(lua_State* l)
+static int
+celestia_loadfont(lua_State *l)
 {
     CelxLua celx(l);
 
     celx.checkArgs(2, 2, "Need one argument for celestia:loadfont()");
     string s = celx.safeGetString(2, AllErrors, "Argument to celestia:loadfont() must be a string");
-    CelestiaCore* appCore = getAppCore(l, AllErrors);
-    auto font = LoadTextureFont(appCore->getRenderer(), s);
-    if (font == nullptr) return 0;
+    CelestiaCore *appCore = getAppCore(l, AllErrors);
+    auto          font    = LoadTextureFont(appCore->getRenderer(), s);
+    if (font == nullptr)
+        return 0;
     return celx.pushClass(font);
 }
 
-std::shared_ptr<TextureFont> getFont(CelestiaCore* appCore)
+std::shared_ptr<TextureFont>
+getFont(CelestiaCore *appCore)
 {
     return appCore->font;
 }
 
-static int celestia_getfont(lua_State* l)
+static int
+celestia_getfont(lua_State *l)
 {
     CelxLua celx(l);
 
     celx.checkArgs(1, 1, "No arguments expected to function celestia:getfont");
 
-    CelestiaCore* appCore = getAppCore(l, AllErrors);
-    auto font = getFont(appCore);
+    CelestiaCore *appCore = getAppCore(l, AllErrors);
+    auto          font    = getFont(appCore);
     if (font == nullptr)
         return 0;
     return celx.pushClass(font);
 }
 
-std::shared_ptr<TextureFont> getTitleFont(CelestiaCore* appCore)
+std::shared_ptr<TextureFont>
+getTitleFont(CelestiaCore *appCore)
 {
     return appCore->titleFont;
 }
 
-static int celestia_gettitlefont(lua_State* l)
+static int
+celestia_gettitlefont(lua_State *l)
 {
     CelxLua celx(l);
 
     celx.checkArgs(1, 1, "No arguments expected to function celestia:gettitlefont");
 
-    CelestiaCore* appCore = getAppCore(l, AllErrors);
-    auto font = getTitleFont(appCore);
+    CelestiaCore *appCore = getAppCore(l, AllErrors);
+    auto          font    = getTitleFont(appCore);
     if (font == nullptr)
         return 0;
     return celx.pushClass(font);
 }
 
-static int celestia_settimeslice(lua_State* l)
+static int
+celestia_settimeslice(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument required for celestia:settimeslice()");
-    //CelestiaCore* appCore = this_celestia(l);
+    // CelestiaCore* appCore = this_celestia(l);
 
     if (!lua_isnumber(l, 2) && !lua_isnil(l, 2))
     {
@@ -2810,20 +3460,22 @@ static int celestia_settimeslice(lua_State* l)
         return 0;
     }
 
-    double timeslice = Celx_SafeGetNumber(l, 2, AllErrors, "Argument to celestia:settimeslice must be a number");
+    double timeslice
+        = Celx_SafeGetNumber(l, 2, AllErrors, "Argument to celestia:settimeslice must be a number");
     if (timeslice == 0.0)
         timeslice = 0.1;
 
-    LuaState* luastate = getLuaStateObject(l);
-    luastate->timeout = luastate->getTime() + timeslice;
+    LuaState *luastate = getLuaStateObject(l);
+    luastate->timeout  = luastate->getTime() + timeslice;
 
     return 0;
 }
 
-static int celestia_setluahook(lua_State* l)
+static int
+celestia_setluahook(lua_State *l)
 {
     Celx_CheckArgs(l, 2, 2, "One argument required for celestia:setluahook()");
-    CelestiaCore* appCore = this_celestia(l);
+    CelestiaCore *appCore = this_celestia(l);
 
     if (!lua_istable(l, 2) && !lua_isnil(l, 2))
     {
@@ -2831,7 +3483,7 @@ static int celestia_setluahook(lua_State* l)
         return 0;
     }
 
-    LuaState* luastate = getLuaStateObject(l);
+    LuaState *luastate = getLuaStateObject(l);
     if (luastate != nullptr)
     {
         luastate->setLuaHookEventHandlerEnabled(lua_istable(l, 2));
@@ -2844,12 +3496,13 @@ static int celestia_setluahook(lua_State* l)
     return 0;
 }
 
-static int celestia_newcategory(lua_State *l)
+static int
+celestia_newcategory(lua_State *l)
 {
     CelxLua celx(l);
 
-    const char *emsg = "Argument of celestia:newcategory must be a string!";
-    const char *name = celx.safeGetString(2, AllErrors, emsg);
+    const char *emsg   = "Argument of celestia:newcategory must be a string!";
+    const char *name   = celx.safeGetString(2, AllErrors, emsg);
     const char *domain = "";
     if (name == nullptr)
     {
@@ -2864,7 +3517,8 @@ static int celestia_newcategory(lua_State *l)
     return celx.pushClass(c);
 }
 
-static int celestia_findcategory(lua_State *l)
+static int
+celestia_findcategory(lua_State *l)
 {
     CelxLua celx(l);
 
@@ -2881,11 +3535,12 @@ static int celestia_findcategory(lua_State *l)
     return celx.pushClass(c);
 }
 
-static int celestia_deletecategory(lua_State *l)
+static int
+celestia_deletecategory(lua_State *l)
 {
     CelxLua celx(l);
 
-    bool ret;
+    bool        ret;
     const char *emsg = "Argument of celestia:deletecategory() must be a string or userdata.";
     if (celx.isString(2))
     {
@@ -2896,7 +3551,7 @@ static int celestia_deletecategory(lua_State *l)
             return 0;
         }
         auto c = UserCategory::find(n);
-        ret = UserCategory::destroy(c);
+        ret    = UserCategory::destroy(c);
     }
     else
     {
@@ -2911,29 +3566,38 @@ static int celestia_deletecategory(lua_State *l)
     return celx.push(ret);
 }
 
-static int celestia_getcategories(lua_State *l)
+static int
+celestia_getcategories(lua_State *l)
 {
     CelxLua celx(l);
 
-    const auto& set = UserCategory::active();
+    const auto &set = UserCategory::active();
     return celx.pushIterable<UserCategoryId>(set);
 }
 
-static int celestia_getrootcategories(lua_State *l)
+static int
+celestia_getrootcategories(lua_State *l)
 {
     CelxLua celx(l);
 
-    const auto& set = UserCategory::roots();
+    const auto &set = UserCategory::roots();
     return celx.pushIterable<UserCategoryId>(set);
 }
 
-static int celestia_bindtranslationdomain(lua_State *l)
+static int
+celestia_bindtranslationdomain(lua_State *l)
 {
 #ifdef ENABLE_NLS
     CelxLua celx(l);
 
-    const char *domain = celx.safeGetNonEmptyString(2, AllErrors, "First argument of celestia:bindtranslationdomain must be domain name string.");
-    const char *dir = celx.safeGetString(3, AllErrors, "Second argument of celestia:bindtranslationdomain must be directory name string.");
+    const char *domain = celx.safeGetNonEmptyString(
+        2,
+        AllErrors,
+        "First argument of celestia:bindtranslationdomain must be domain name string.");
+    const char *dir = celx.safeGetString(
+        3,
+        AllErrors,
+        "Second argument of celestia:bindtranslationdomain must be directory name string.");
     const char *newdir = bindtextdomain(domain, dir);
     if (newdir == nullptr)
         return 0;
@@ -2943,19 +3607,22 @@ static int celestia_bindtranslationdomain(lua_State *l)
 #endif
 }
 
-static int celestia_setasterisms(lua_State *l)
+static int
+celestia_setasterisms(lua_State *l)
 {
     CelxLua celx(l);
     celx.checkArgs(2, 2, "Need one argument for celestia:setasterisms()");
-    const char* s = celx.safeGetString(2, AllErrors, "Argument to celestia:setasterisms() must be a string");
-    CelestiaCore* appCore = getAppCore(l, AllErrors);
+    const char *s
+        = celx.safeGetString(2, AllErrors, "Argument to celestia:setasterisms() must be a string");
+    CelestiaCore *appCore = getAppCore(l, AllErrors);
 
     appCore->loadAsterismsFile(s);
 
     return 0;
 }
 
-void ExtendCelestiaMetaTable(lua_State* l)
+void
+ExtendCelestiaMetaTable(lua_State *l)
 {
     CelxLua celx(l);
 
@@ -2978,5 +3645,7 @@ void ExtendCelestiaMetaTable(lua_State* l)
     celx.registerMethod("getrootcategories", celestia_getrootcategories);
     celx.registerMethod("bindtranslationdomain", celestia_bindtranslationdomain);
     celx.registerMethod("setasterisms", celestia_setasterisms);
+    // VTS //
+    celx.registerMethod("getvtsextradir", celestia_getvtsextradir);
     celx.pop(1);
 }

@@ -12,15 +12,14 @@
 
 #include <algorithm>
 #include <cassert>
+#include <celcompat/numbers.h>
+#include <celengine/body.h>
+#include <celmath/geomutil.h>
+#include <celmath/mathlib.h>
+#include <celmath/solve.h>
 #include <cmath>
 #include <functional>
 #include <utility>
-
-#include <celcompat/numbers.h>
-#include <celengine/body.h>
-#include <celmath/mathlib.h>
-#include <celmath/solve.h>
-#include <celmath/geomutil.h>
 
 namespace celestia::ephem
 {
@@ -35,13 +34,17 @@ constexpr double ORBITAL_VELOCITY_DIFF_DELTA = 1.0 / 1440.0;
 // Follow hyperbolic orbit trajectories out to at least 1000 au
 constexpr double HyperbolicMinBoundingRadius = 1000.0 * astro::KM_PER_AU<double>;
 
-Eigen::Vector3d cubicInterpolate(const Eigen::Vector3d& p0, const Eigen::Vector3d& v0,
-                                 const Eigen::Vector3d& p1, const Eigen::Vector3d& v1,
-                                 double t)
+Eigen::Vector3d
+cubicInterpolate(
+    const Eigen::Vector3d &p0,
+    const Eigen::Vector3d &v0,
+    const Eigen::Vector3d &p1,
+    const Eigen::Vector3d &v1,
+    double                 t)
 {
-    return p0 + (((2.0 * (p0 - p1) + v1 + v0) * (t * t * t)) +
-                ((3.0 * (p1 - p0) - 2.0 * v0 - v1) * (t * t)) +
-                (v0 * t));
+    return p0
+           + (((2.0 * (p0 - p1) + v1 + v0) * (t * t * t))
+              + ((3.0 * (p1 - p0) - 2.0 * v0 - v1) * (t * t)) + (v0 * t));
 }
 
 // Standard iteration for solving Kepler's Equation
@@ -50,14 +53,13 @@ struct SolveKeplerFunc1
     double ecc;
     double M;
 
-    SolveKeplerFunc1(double _ecc, double _M) : ecc(_ecc), M(_M) {};
+    SolveKeplerFunc1(double _ecc, double _M) : ecc(_ecc), M(_M){};
 
     double operator()(double x) const
     {
         return M + ecc * std::sin(x);
     }
 };
-
 
 // Faster converging iteration for Kepler's Equation; more efficient
 // than above for orbits with eccentricities greater than 0.3.  This
@@ -67,7 +69,7 @@ struct SolveKeplerFunc2
     double ecc;
     double M;
 
-    SolveKeplerFunc2(double _ecc, double _M) : ecc(_ecc), M(_M) {};
+    SolveKeplerFunc2(double _ecc, double _M) : ecc(_ecc), M(_M){};
 
     double operator()(double x) const
     {
@@ -78,13 +80,12 @@ struct SolveKeplerFunc2
     }
 };
 
-
 struct SolveKeplerLaguerreConway
 {
     double ecc;
     double M;
 
-    SolveKeplerLaguerreConway(double _ecc, double _M) : ecc(_ecc), M(_M) {};
+    SolveKeplerLaguerreConway(double _ecc, double _M) : ecc(_ecc), M(_M){};
 
     double operator()(double x) const
     {
@@ -93,10 +94,11 @@ struct SolveKeplerLaguerreConway
         celmath::sincos(x, s, c);
         s *= ecc;
         c *= ecc;
-        double f = x - s - M;
+        double f  = x - s - M;
         double f1 = 1.0 - c;
         double f2 = s;
-        x += -5.0 * f / (f1 + celmath::sign(f1) * std::sqrt(std::abs(16.0 * f1 * f1 - 20.0 * f * f2)));
+        x += -5.0 * f
+             / (f1 + celmath::sign(f1) * std::sqrt(std::abs(16.0 * f1 * f1 - 20.0 * f * f2)));
 
         return x;
     }
@@ -107,23 +109,24 @@ struct SolveKeplerLaguerreConwayHyp
     double ecc;
     double M;
 
-    SolveKeplerLaguerreConwayHyp(double _ecc, double _M) : ecc(_ecc), M(_M) {};
+    SolveKeplerLaguerreConwayHyp(double _ecc, double _M) : ecc(_ecc), M(_M){};
 
     double operator()(double x) const
     {
-        double s = ecc * std::sinh(x);
-        double c = ecc * std::cosh(x);
-        double f = s - x - M;
+        double s  = ecc * std::sinh(x);
+        double c  = ecc * std::cosh(x);
+        double f  = s - x - M;
         double f1 = c - 1.0;
         double f2 = s;
-        x += -5.0 * f / (f1 + celmath::sign(f1) * std::sqrt(std::abs(16.0 * f1 * f1 - 20.0 * f * f2)));
+        x += -5.0 * f
+             / (f1 + celmath::sign(f1) * std::sqrt(std::abs(16.0 * f1 * f1 - 20.0 * f * f2)));
 
         return x;
     }
 };
 
 std::unique_ptr<Orbit>
-CreateKeplerOrbit(const astro::KeplerElements& elements, double epoch)
+CreateKeplerOrbit(const astro::KeplerElements &elements, double epoch)
 {
     if (elements.eccentricity < 1.0)
         return std::make_unique<EllipticalOrbit>(elements, epoch);
@@ -134,19 +137,20 @@ CreateKeplerOrbit(const astro::KeplerElements& elements, double epoch)
 } // end unnamed namespace
 
 /** Sample the orbit over the time range [ startTime, endTime ] using the
-  * default sampling parameters for the orbit type.
-  *
-  * Subclasses of orbit should override this method as necessary. The default
-  * implementation uses an adaptive sampling scheme with the following defaults:
-  *    tolerance: 1 km
-  *    start step: T / 1e5
-  *    min step: T / 1e7
-  *    max step: T / 100
-  *
-  * Where T is either the mean orbital period for periodic orbits or the valid
-  * time span for aperiodic trajectories.
-  */
-void Orbit::sample(double startTime, double endTime, OrbitSampleProc& proc) const
+ * default sampling parameters for the orbit type.
+ *
+ * Subclasses of orbit should override this method as necessary. The default
+ * implementation uses an adaptive sampling scheme with the following defaults:
+ *    tolerance: 1 km
+ *    start step: T / 1e5
+ *    min step: T / 1e7
+ *    max step: T / 100
+ *
+ * Where T is either the mean orbital period for periodic orbits or the valid
+ * time span for aperiodic trajectories.
+ */
+void
+Orbit::sample(double startTime, double endTime, OrbitSampleProc &proc) const
 {
     double span = 0.0;
     if (isPeriodic())
@@ -156,7 +160,7 @@ void Orbit::sample(double startTime, double endTime, OrbitSampleProc& proc) cons
     else
     {
         double startValidInterval = 0.0;
-        double endValidInterval = 0.0;
+        double endValidInterval   = 0.0;
         getValidRange(startValidInterval, endValidInterval);
         if (startValidInterval == endValidInterval)
         {
@@ -170,24 +174,28 @@ void Orbit::sample(double startTime, double endTime, OrbitSampleProc& proc) cons
 
     AdaptiveSamplingParameters samplingParams;
     samplingParams.tolerance = 1.0; // kilometers
-    samplingParams.maxStep = span / 100.0;
-    samplingParams.minStep = span / 1.0e7;
+    samplingParams.maxStep   = span / 100.0;
+    samplingParams.minStep   = span / 1.0e7;
     samplingParams.startStep = span / 1.0e5;
 
     adaptiveSample(startTime, endTime, proc, samplingParams);
 }
 
-
 /** Adaptively sample the orbit over the range [ startTime, endTime ].
-  */
-void Orbit::adaptiveSample(double startTime, double endTime, OrbitSampleProc& proc, const AdaptiveSamplingParameters& samplingParams) const
+ */
+void
+Orbit::adaptiveSample(
+    double                            startTime,
+    double                            endTime,
+    OrbitSampleProc                  &proc,
+    const AdaptiveSamplingParameters &samplingParams) const
 {
-    double startStepSize = samplingParams.startStep;
-    double maxStepSize   = samplingParams.maxStep;
-    double minStepSize   = samplingParams.minStep;
-    double tolerance     = samplingParams.tolerance;
-    double t = startTime;
-    const double stepFactor = 1.25;
+    double       startStepSize = samplingParams.startStep;
+    double       maxStepSize   = samplingParams.maxStep;
+    double       minStepSize   = samplingParams.minStep;
+    double       tolerance     = samplingParams.tolerance;
+    double       t             = startTime;
+    const double stepFactor    = 1.25;
 
     Eigen::Vector3d lastP = positionAtTime(t);
     Eigen::Vector3d lastV = velocityAtTime(t);
@@ -197,16 +205,14 @@ void Orbit::adaptiveSample(double startTime, double endTime, OrbitSampleProc& pr
     {
         // Make sure that we don't go past the end of the sample interval
         maxStepSize = std::min(maxStepSize, endTime - t);
-        double dt = std::min(maxStepSize, startStepSize * 2.0);
+        double dt   = std::min(maxStepSize, startStepSize * 2.0);
 
         Eigen::Vector3d p1 = positionAtTime(t + dt);
         Eigen::Vector3d v1 = velocityAtTime(t + dt);
 
-        double tmid = t + dt / 2.0;
-        Eigen::Vector3d pTest = positionAtTime(tmid);
-        Eigen::Vector3d pInterp = cubicInterpolate(lastP, lastV * dt,
-                                                   p1, v1 * dt,
-                                                   0.5);
+        double          tmid    = t + dt / 2.0;
+        Eigen::Vector3d pTest   = positionAtTime(tmid);
+        Eigen::Vector3d pInterp = cubicInterpolate(lastP, lastV * dt, p1, v1 * dt, 0.5);
 
         double positionError = (pInterp - pTest).norm();
 
@@ -221,11 +227,9 @@ void Orbit::adaptiveSample(double startTime, double endTime, OrbitSampleProc& pr
                 p1 = positionAtTime(t + dt);
                 v1 = velocityAtTime(t + dt);
 
-                tmid = t + dt / 2.0;
-                pTest = positionAtTime(tmid);
-                pInterp = cubicInterpolate(lastP, lastV * dt,
-                                           p1, v1 * dt,
-                                           0.5);
+                tmid    = t + dt / 2.0;
+                pTest   = positionAtTime(tmid);
+                pInterp = cubicInterpolate(lastP, lastV * dt, p1, v1 * dt, 0.5);
 
                 positionError = (pInterp - pTest).norm();
             }
@@ -241,17 +245,15 @@ void Orbit::adaptiveSample(double startTime, double endTime, OrbitSampleProc& pr
                 p1 = positionAtTime(t + dt);
                 v1 = velocityAtTime(t + dt);
 
-                tmid = t + dt / 2.0;
-                pTest = positionAtTime(tmid);
-                pInterp = cubicInterpolate(lastP, lastV * dt,
-                                           p1, v1 * dt,
-                                           0.5);
+                tmid    = t + dt / 2.0;
+                pTest   = positionAtTime(tmid);
+                pInterp = cubicInterpolate(lastP, lastV * dt, p1, v1 * dt, 0.5);
 
                 positionError = (pInterp - pTest).norm();
             }
         }
 
-        t = t + dt;
+        t     = t + dt;
         lastP = p1;
         lastV = v1;
 
@@ -259,24 +261,37 @@ void Orbit::adaptiveSample(double startTime, double endTime, OrbitSampleProc& pr
     }
 }
 
+// VTS //
 
-Eigen::Vector3d Orbit::velocityAtTime(double tdb) const
+
+/* Modif VTS pour prendre en compte le d placement des objets
+ * pendant le grossissement du satellite
+ */
+void
+Orbit::setMagCoeff(float coeff)
+{
+    magCoeff_ = coeff;
+}
+
+Eigen::Vector3d
+Orbit::velocityAtTime(double tdb) const
 {
     Eigen::Vector3d p0 = positionAtTime(tdb);
     Eigen::Vector3d p1 = positionAtTime(tdb + ORBITAL_VELOCITY_DIFF_DELTA);
     return (p1 - p0) * (1.0 / ORBITAL_VELOCITY_DIFF_DELTA);
 }
 
+Orbit::Orbit() : magCoeff_(1.0f)
+{
+}
 
-EllipticalOrbit::EllipticalOrbit(const astro::KeplerElements& _elements, double _epoch) :
-    semiMajorAxis(_elements.semimajorAxis),
-    eccentricity(_elements.eccentricity),
-    meanAnomalyAtEpoch(_elements.meanAnomaly),
-    period(_elements.period),
-    epoch(_epoch),
-    orbitPlaneRotation((celmath::ZRotation(_elements.longAscendingNode) *
-                        celmath::XRotation(_elements.inclination) *
-                        celmath::ZRotation(_elements.argPericenter)).toRotationMatrix())
+EllipticalOrbit::EllipticalOrbit(const astro::KeplerElements &_elements, double _epoch) :
+    semiMajorAxis(_elements.semimajorAxis), eccentricity(_elements.eccentricity),
+    meanAnomalyAtEpoch(_elements.meanAnomaly), period(_elements.period), epoch(_epoch),
+    orbitPlaneRotation(
+        (celmath::ZRotation(_elements.longAscendingNode) * celmath::XRotation(_elements.inclination)
+         * celmath::ZRotation(_elements.argPericenter))
+            .toRotationMatrix())
 {
     assert(eccentricity >= 0.0 && eccentricity < 1.0);
     assert(semiMajorAxis >= 0.0);
@@ -284,8 +299,8 @@ EllipticalOrbit::EllipticalOrbit(const astro::KeplerElements& _elements, double 
     semiMinorAxis = semiMajorAxis * std::sqrt(1.0 - celmath::square(eccentricity));
 }
 
-
-double EllipticalOrbit::eccentricAnomaly(double M) const
+double
+EllipticalOrbit::eccentricAnomaly(double M) const
 {
     if (eccentricity == 0.0)
     {
@@ -311,10 +326,10 @@ double EllipticalOrbit::eccentricAnomaly(double M) const
     return celmath::solve_iteration_fixed(SolveKeplerLaguerreConway(eccentricity, M), E, 8).first;
 }
 
-
 // Compute the position at the specified eccentric
 // anomaly E.
-Eigen::Vector3d EllipticalOrbit::positionAtE(double E) const
+Eigen::Vector3d
+EllipticalOrbit::positionAtE(double E) const
 {
     double x = semiMajorAxis * (std::cos(E) - eccentricity);
     double y = semiMinorAxis * std::sin(E);
@@ -325,10 +340,10 @@ Eigen::Vector3d EllipticalOrbit::positionAtE(double E) const
     return Eigen::Vector3d(p.x(), p.z(), -p.y());
 }
 
-
 // Compute the velocity at the specified eccentric
 // anomaly E.
-Eigen::Vector3d EllipticalOrbit::velocityAtE(double E, double meanMotion) const
+Eigen::Vector3d
+EllipticalOrbit::velocityAtE(double E, double meanMotion) const
 {
     double sinE;
     double cosE;
@@ -337,7 +352,7 @@ Eigen::Vector3d EllipticalOrbit::velocityAtE(double E, double meanMotion) const
     double edot = meanMotion / (1.0 - eccentricity * cosE);
 
     double x = -semiMajorAxis * sinE * edot;
-    double y =  semiMinorAxis * cosE * edot;
+    double y = semiMinorAxis * cosE * edot;
 
     Eigen::Vector3d v = orbitPlaneRotation * Eigen::Vector3d(x, y, 0);
 
@@ -345,83 +360,88 @@ Eigen::Vector3d EllipticalOrbit::velocityAtE(double E, double meanMotion) const
     return Eigen::Vector3d(v.x(), v.z(), -v.y());
 }
 
-
 // Return the offset from the center
-Eigen::Vector3d EllipticalOrbit::positionAtTime(double t) const
+Eigen::Vector3d
+EllipticalOrbit::positionAtTime(double t) const
 {
-    t = t - epoch;
-    double meanMotion = 2.0 * celestia::numbers::pi / period;
+    t                  = t - epoch;
+    double meanMotion  = 2.0 * celestia::numbers::pi / period;
     double meanAnomaly = meanAnomalyAtEpoch + t * meanMotion;
-    double E = eccentricAnomaly(meanAnomaly);
+    double E           = eccentricAnomaly(meanAnomaly);
 
     return positionAtE(E);
 }
 
-
-Eigen::Vector3d EllipticalOrbit::velocityAtTime(double t) const
+Eigen::Vector3d
+EllipticalOrbit::velocityAtTime(double t) const
 {
-    t = t - epoch;
-    double meanMotion = 2.0 * celestia::numbers::pi / period;
+    t                  = t - epoch;
+    double meanMotion  = 2.0 * celestia::numbers::pi / period;
     double meanAnomaly = meanAnomalyAtEpoch + t * meanMotion;
-    double E = eccentricAnomaly(meanAnomaly);
+    double E           = eccentricAnomaly(meanAnomaly);
 
     return velocityAtE(E, meanMotion);
 }
 
-
-double EllipticalOrbit::getPeriod() const
+double
+EllipticalOrbit::getPeriod() const
 {
     return period;
 }
 
-
-double EllipticalOrbit::getBoundingRadius() const
+double
+EllipticalOrbit::getBoundingRadius() const
 {
     // TODO: watch out for unbounded parabolic and hyperbolic orbits
     return semiMajorAxis * (1.0 + eccentricity);
 }
 
-
-HyperbolicOrbit::HyperbolicOrbit(const astro::KeplerElements& _elements, double _epoch) :
-    semiMajorAxis(_elements.semimajorAxis),
-    eccentricity(_elements.eccentricity),
-    meanAnomalyAtEpoch(_elements.meanAnomaly),
-    epoch(_epoch),
-    orbitPlaneRotation((celmath::ZRotation(_elements.longAscendingNode) *
-                        celmath::XRotation(_elements.inclination) *
-                        celmath::ZRotation(_elements.argPericenter)).toRotationMatrix())
+HyperbolicOrbit::HyperbolicOrbit(const astro::KeplerElements &_elements, double _epoch) :
+    semiMajorAxis(_elements.semimajorAxis), eccentricity(_elements.eccentricity),
+    meanAnomalyAtEpoch(_elements.meanAnomaly), epoch(_epoch),
+    orbitPlaneRotation(
+        (celmath::ZRotation(_elements.longAscendingNode) * celmath::XRotation(_elements.inclination)
+         * celmath::ZRotation(_elements.argPericenter))
+            .toRotationMatrix())
 {
     assert(eccentricity > 1.0);
     assert(semiMajorAxis <= 0.0);
     assert(_elements.period != 0.0);
     semiMinorAxis = semiMajorAxis * std::sqrt(celmath::square(eccentricity) - 1.0);
-    meanMotion = 2.0 * celestia::numbers::pi / _elements.period;
+    meanMotion    = 2.0 * celestia::numbers::pi / _elements.period;
 
     // determine start and end epoch from when the object hits the bounding radius
     double pericenterDistance = semiMajorAxis * (1.0 - eccentricity);
-    double boundingRadius = getBoundingRadius();
-    double cosTrueAnomaly = (pericenterDistance / boundingRadius - 1.0) / eccentricity;
-    double eccAnomaly = std::acosh((eccentricity + cosTrueAnomaly) / (1.0 + eccentricity * cosTrueAnomaly));
+    double boundingRadius     = getBoundingRadius();
+    double cosTrueAnomaly     = (pericenterDistance / boundingRadius - 1.0) / eccentricity;
+    double eccAnomaly
+        = std::acosh((eccentricity + cosTrueAnomaly) / (1.0 + eccentricity * cosTrueAnomaly));
     double meanAnomaly = eccentricity * std::sinh(eccAnomaly) - eccAnomaly;
-    double deltaT = std::abs(meanAnomaly / meanMotion);
-    startEpoch = epoch - deltaT;
-    endEpoch = epoch + deltaT;
+    double deltaT      = std::abs(meanAnomaly / meanMotion);
+    startEpoch         = epoch - deltaT;
+    endEpoch           = epoch + deltaT;
 }
 
-
-double HyperbolicOrbit::eccentricAnomaly(double M) const
+double
+HyperbolicOrbit::eccentricAnomaly(double M) const
 {
     // Laguerre-Conway method for hyperbolic (ecc > 1) orbits.
     if (M == 0.0)
         return 0.0;
     double E = std::log(2.0 * std::abs(M) / eccentricity + 1.85);
-    return std::copysign(celmath::solve_iteration_fixed(SolveKeplerLaguerreConwayHyp(eccentricity, std::abs(M)), E, 30).first, M);
+    return std::copysign(
+        celmath::solve_iteration_fixed(
+            SolveKeplerLaguerreConwayHyp(eccentricity, std::abs(M)),
+            E,
+            30)
+            .first,
+        M);
 }
-
 
 // Compute the position at the specified eccentric
 // anomaly E.
-Eigen::Vector3d HyperbolicOrbit::positionAtE(double E) const
+Eigen::Vector3d
+HyperbolicOrbit::positionAtE(double E) const
 {
     double x = -semiMajorAxis * (eccentricity - std::cosh(E));
     double y = -semiMinorAxis * std::sinh(E);
@@ -432,15 +452,15 @@ Eigen::Vector3d HyperbolicOrbit::positionAtE(double E) const
     return Eigen::Vector3d(p.x(), p.z(), -p.y());
 }
 
-
 // Compute the velocity at the specified eccentric
 // anomaly E.
-Eigen::Vector3d HyperbolicOrbit::velocityAtE(double E) const
+Eigen::Vector3d
+HyperbolicOrbit::velocityAtE(double E) const
 {
     double coshE = std::cosh(E);
-    double edot = meanMotion / (eccentricity * coshE - 1);
+    double edot  = meanMotion / (eccentricity * coshE - 1);
 
-    double x =  semiMajorAxis * std::sinh(E) * edot;
+    double x = semiMajorAxis * std::sinh(E) * edot;
     double y = -semiMinorAxis * coshE * edot;
 
     Eigen::Vector3d v = orbitPlaneRotation * Eigen::Vector3d(x, y, 0);
@@ -449,98 +469,97 @@ Eigen::Vector3d HyperbolicOrbit::velocityAtE(double E) const
     return Eigen::Vector3d(v.x(), v.z(), -v.y());
 }
 
-
 // Return the offset from the center
-Eigen::Vector3d HyperbolicOrbit::positionAtTime(double t) const
+Eigen::Vector3d
+HyperbolicOrbit::positionAtTime(double t) const
 {
-    t = t - epoch;
+    t                  = t - epoch;
     double meanAnomaly = meanAnomalyAtEpoch + t * meanMotion;
-    double E = eccentricAnomaly(meanAnomaly);
+    double E           = eccentricAnomaly(meanAnomaly);
 
     return positionAtE(E);
 }
 
-
-Eigen::Vector3d HyperbolicOrbit::velocityAtTime(double t) const
+Eigen::Vector3d
+HyperbolicOrbit::velocityAtTime(double t) const
 {
-    t = t - epoch;
+    t                  = t - epoch;
     double meanAnomaly = meanAnomalyAtEpoch + t * meanMotion;
-    double E = eccentricAnomaly(meanAnomaly);
+    double E           = eccentricAnomaly(meanAnomaly);
 
     return velocityAtE(E);
 }
 
-
-double HyperbolicOrbit::getPeriod() const
+double
+HyperbolicOrbit::getPeriod() const
 {
     // As this is a non-periodic orbit, we return the sample window here
     return endEpoch - startEpoch;
 }
 
-
-double HyperbolicOrbit::getBoundingRadius() const
+double
+HyperbolicOrbit::getBoundingRadius() const
 {
     return std::max(2.0 * semiMajorAxis * (1.0 - eccentricity), HyperbolicMinBoundingRadius);
 }
 
-
-bool HyperbolicOrbit::isPeriodic() const
+bool
+HyperbolicOrbit::isPeriodic() const
 {
     return false;
 }
 
-
-void HyperbolicOrbit::getValidRange(double& begin, double& end) const
+void
+HyperbolicOrbit::getValidRange(double &begin, double &end) const
 {
     begin = startEpoch;
-    end = endEpoch;
+    end   = endEpoch;
 }
 
-
-
-Eigen::Vector3d CachingOrbit::positionAtTime(double jd) const
+Eigen::Vector3d
+CachingOrbit::positionAtTime(double jd) const
 {
     if (jd != lastTime)
     {
-        lastTime = jd;
-        lastPosition = computePosition(jd);
+        lastTime           = jd;
+        lastPosition       = computePosition(jd);
         positionCacheValid = true;
         velocityCacheValid = false;
     }
     else if (!positionCacheValid)
     {
-        lastPosition = computePosition(jd);
+        lastPosition       = computePosition(jd);
         positionCacheValid = true;
     }
 
     return lastPosition;
 }
 
-
-Eigen::Vector3d CachingOrbit::velocityAtTime(double jd) const
+Eigen::Vector3d
+CachingOrbit::velocityAtTime(double jd) const
 {
     if (jd != lastTime)
     {
-        lastVelocity = computeVelocity(jd);
-        lastTime = jd;  // must be set *after* call to computeVelocity
+        lastVelocity       = computeVelocity(jd);
+        lastTime           = jd; // must be set *after* call to computeVelocity
         positionCacheValid = false;
         velocityCacheValid = true;
     }
     else if (!velocityCacheValid)
     {
-        lastVelocity = computeVelocity(jd);
+        lastVelocity       = computeVelocity(jd);
         velocityCacheValid = true;
     }
 
     return lastVelocity;
 }
 
-
 /*! Calculate the velocity at the specified time (units are
  *  kilometers / Julian day.) The default implementation just
  *  differentiates the position.
  */
-Eigen::Vector3d CachingOrbit::computeVelocity(double jd) const
+Eigen::Vector3d
+CachingOrbit::computeVelocity(double jd) const
 {
     // Compute the velocity by differentiating.
     Eigen::Vector3d p0 = positionAtTime(jd);
@@ -554,29 +573,25 @@ Eigen::Vector3d CachingOrbit::computeVelocity(double jd) const
     return (p1 - p0) * (1.0 / ORBITAL_VELOCITY_DIFF_DELTA);
 }
 
-
-MixedOrbit::MixedOrbit(std::unique_ptr<Orbit>&& orbit, double t0, double t1, double mass) :
-    primary(std::move(orbit)),
-    begin(t0),
-    end(t1),
-    boundingRadius(0.0)
+MixedOrbit::MixedOrbit(std::unique_ptr<Orbit> &&orbit, double t0, double t1, double mass) :
+    primary(std::move(orbit)), begin(t0), end(t1), boundingRadius(0.0)
 {
     assert(t1 > t0);
     assert(primary != nullptr);
 
-    double dt = 1.0 / 1440.0; // 1 minute
+    double          dt = 1.0 / 1440.0; // 1 minute
     Eigen::Vector3d p0 = primary->positionAtTime(t0);
     Eigen::Vector3d p1 = primary->positionAtTime(t1);
     Eigen::Vector3d v0 = (primary->positionAtTime(t0 + dt) - p0) / (86400.0 * dt);
     Eigen::Vector3d v1 = (primary->positionAtTime(t1 + dt) - p1) / (86400.0 * dt);
 
-    constexpr double G = astro::G * 1e-9; // convert from meters to kilometers
-    double Gmass = G * mass;
+    constexpr double G     = astro::G * 1e-9; // convert from meters to kilometers
+    double           Gmass = G * mass;
 
     auto keplerElements = astro::StateVectorToElements(p0, v0, Gmass);
-    beforeApprox = CreateKeplerOrbit(keplerElements, t0);
-    keplerElements = astro::StateVectorToElements(p1, v1, Gmass);
-    afterApprox = CreateKeplerOrbit(keplerElements, t1);
+    beforeApprox        = CreateKeplerOrbit(keplerElements, t0);
+    keplerElements      = astro::StateVectorToElements(p1, v1, Gmass);
+    afterApprox         = CreateKeplerOrbit(keplerElements, t1);
 
     boundingRadius = beforeApprox->getBoundingRadius();
     if (primary->getBoundingRadius() > boundingRadius)
@@ -585,8 +600,8 @@ MixedOrbit::MixedOrbit(std::unique_ptr<Orbit>&& orbit, double t0, double t1, dou
         boundingRadius = afterApprox->getBoundingRadius();
 }
 
-
-Eigen::Vector3d MixedOrbit::positionAtTime(double jd) const
+Eigen::Vector3d
+MixedOrbit::positionAtTime(double jd) const
 {
     if (jd < begin)
         return beforeApprox->positionAtTime(jd);
@@ -596,8 +611,8 @@ Eigen::Vector3d MixedOrbit::positionAtTime(double jd) const
         return afterApprox->positionAtTime(jd);
 }
 
-
-Eigen::Vector3d MixedOrbit::velocityAtTime(double jd) const
+Eigen::Vector3d
+MixedOrbit::velocityAtTime(double jd) const
 {
     if (jd < begin)
         return beforeApprox->velocityAtTime(jd);
@@ -607,22 +622,22 @@ Eigen::Vector3d MixedOrbit::velocityAtTime(double jd) const
         return afterApprox->velocityAtTime(jd);
 }
 
-
-double MixedOrbit::getPeriod() const
+double
+MixedOrbit::getPeriod() const
 {
     return primary->getPeriod();
 }
 
-
-double MixedOrbit::getBoundingRadius() const
+double
+MixedOrbit::getBoundingRadius() const
 {
     return boundingRadius;
 }
 
-
-void MixedOrbit::sample(double startTime, double endTime, OrbitSampleProc& proc) const
+void
+MixedOrbit::sample(double startTime, double endTime, OrbitSampleProc &proc) const
 {
-    const Orbit* o;
+    const Orbit *o;
     if (startTime < begin)
         o = beforeApprox.get();
     else if (startTime < end)
@@ -632,20 +647,17 @@ void MixedOrbit::sample(double startTime, double endTime, OrbitSampleProc& proc)
     o->sample(startTime, endTime, proc);
 }
 
-
 /*** FixedOrbit ***/
 
-FixedOrbit::FixedOrbit(const Eigen::Vector3d& pos) :
-    position(pos)
+FixedOrbit::FixedOrbit(const Eigen::Vector3d &pos) : position(pos)
 {
 }
 
 Eigen::Vector3d
 FixedOrbit::positionAtTime(double /*tjd*/) const
 {
-    return position;
+    return position * magCoeff_;
 }
-
 
 bool
 FixedOrbit::isPeriodic() const
@@ -653,13 +665,11 @@ FixedOrbit::isPeriodic() const
     return false;
 }
 
-
 double
 FixedOrbit::getPeriod() const
 {
     return 1.0;
 }
-
 
 double
 FixedOrbit::getBoundingRadius() const
@@ -667,44 +677,41 @@ FixedOrbit::getBoundingRadius() const
     return position.norm() * 1.1;
 }
 
-
 void
-FixedOrbit::sample(double /* startTime */, double /* endTime */, OrbitSampleProc& /*proc*/) const
+FixedOrbit::sample(double /* startTime */, double /* endTime */, OrbitSampleProc & /*proc*/) const
 {
     // Don't add any samples. This will prevent a fixed trajectory from
     // every being drawn when orbit visualization is enabled.
 }
 
-
 /*** SynchronousOrbit ***/
 // TODO: eliminate this class once body-fixed reference frames are implemented
-SynchronousOrbit::SynchronousOrbit(const Body& _body,
-                                   const Eigen::Vector3d& _position) :
-    body(_body),
-    position(_position)
+SynchronousOrbit::SynchronousOrbit(const Body &_body, const Eigen::Vector3d &_position) :
+    body(_body), position(_position)
 {
 }
 
-
-Eigen::Vector3d SynchronousOrbit::positionAtTime(double jd) const
+Eigen::Vector3d
+SynchronousOrbit::positionAtTime(double jd) const
 {
     return body.getEquatorialToBodyFixed(jd).conjugate() * position;
 }
 
-
-double SynchronousOrbit::getPeriod() const
+double
+SynchronousOrbit::getPeriod() const
 {
     return body.getRotationModel(0.0)->getPeriod();
 }
 
-
-double SynchronousOrbit::getBoundingRadius() const
+double
+SynchronousOrbit::getBoundingRadius() const
 {
     return position.norm();
 }
 
-
-void SynchronousOrbit::sample(double /* startTime */, double /* endTime */, OrbitSampleProc& /*proc*/) const
+void
+SynchronousOrbit::sample(double /* startTime */, double /* endTime */, OrbitSampleProc & /*proc*/)
+    const
 {
     // Empty method--we never want to show a synchronous orbit.
 }

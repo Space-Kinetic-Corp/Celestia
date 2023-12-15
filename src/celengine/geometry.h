@@ -51,4 +51,37 @@ public:
     virtual void loadTextures()
     {
     }
+
+    /*! Return true if the geometry can be drawn multiple times in
+     *  different depth ranges to avoid clipping and precision problems.
+     *  Drawing multiple times is expensive, so this method should only
+     *  return true for geometries that are simple and which need to
+     *  be drawn correctly when the camera is positioned very close
+     *  (relative to the size of the object.)
+     */
+    virtual bool isMultidraw() const
+    {
+        return false;
+    }
+
+    /** Set the visibility flag for the named component of this geometry.
+      * Subclasses of Geometry should customize this method if they have
+      * components with visibility that can be controlled independently.
+      * The default implementation does nothing.
+     */
+    virtual void setPartVisible(const std::string& partName, bool visible)
+    {
+    }
+
+    /** Check the visibility flag for the named component of this geometry.
+      * Subclasses of Geometry should customize this method if they have
+      * components with visibility that can be controlled independently.
+      * The default implementation always returns false. Implementations
+      * of isPartVisible by subclasses should also return false for
+      * non-existent parts.
+     */
+    virtual bool isPartVisible(const std::string& partName) const
+    {
+        return false;
+    }
 };

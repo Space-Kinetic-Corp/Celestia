@@ -2,7 +2,7 @@
 |-------------------|---------------|---------------|---------------|
 |[![GitHub release](https://img.shields.io/github/v/release/CelestiaProject/Celestia?label=Release)](https://celestiaproject.space/download.html) | [![Localization](https://img.shields.io/badge/Localized-85%25-green.svg)](#) | [![License](https://img.shields.io/github/license/CelestiaProject/Celestia?label=License)](https://github.com/CelestiaProject/Celestia/blob/master/COPYING) | [![Contribute](https://img.shields.io/badge/PRs-Welcome-brightgreen.svg)](#contributing) |
 
-# Celestia
+# Celestia - Space Kinetic Fork
 ![Celestia](celestia-logo.png)<br>
 **A real-time space simulation that lets you experience our universe in three dimensions.**
 
@@ -12,6 +12,7 @@
 **Celestia forums: https://celestiaproject.space/forum/**<br>
 **Celestia Subreddit: https://www.reddit.com/r/Celestiasoftware/**<br>
 **Celestia Archive Repository: https://github.com/Anthony-B-Russo10/Celestia-Archive**
+** Space Kinetic Fork Maintainer: https://github.com/Greentrunk
 ## License
 
 This program is free software; you can redistribute it and/or modify it under

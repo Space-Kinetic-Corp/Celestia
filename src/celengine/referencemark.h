@@ -12,8 +12,8 @@
 
 #pragma once
 
-#include <string>
 #include <Eigen/Core>
+#include <string>
 
 class Renderer;
 struct Matrices;
@@ -31,17 +31,19 @@ struct Matrices;
  */
 class ReferenceMark
 {
- public:
-    ReferenceMark() {};
-    virtual ~ReferenceMark() {};
+public:
+    ReferenceMark(){};
+    virtual ~ReferenceMark(){};
 
     /*! Draw the reference mark geometry at the specified time.
      */
-    virtual void render(Renderer* renderer,
-                        const Eigen::Vector3f& position,
-                        float discSizeInPixels,
-                        double tdb,
-                        const Matrices& m) const = 0;
+    virtual void render(
+        Renderer              *renderer,
+        const Eigen::Vector3f &position,
+        float                  discSizeInPixels,
+        double                 tdb,
+        const Matrices        &m) const
+        = 0;
 
     /*! Return the radius of a bounding sphere (in kilometers) large enough
      *  to contain the reference mark geometry.
@@ -52,14 +54,27 @@ class ReferenceMark
      *  The default implementation always returns true (i.e. completely
      *  opaque geometry is assumed.)
      */
-    virtual bool isOpaque() const { return true; }
+    virtual bool isOpaque() const
+    {
+        return true;
+    }
 
-    void setTag(const std::string& _tag)
+    /*! Return true if the reference mark sticks to the surface of its body.
+     *  This ensures that it gets rendered right after its body (which is
+     *  required e.g. for marks making use of the stencil buffer).
+     *  The default implementation always returns false.
+     */
+    virtual bool isSurfaceMark() const
+    {
+        return false;
+    }
+
+    void setTag(const std::string &_tag)
     {
         tag = _tag;
     }
 
-    const std::string& getTag() const
+    const std::string &getTag() const
     {
         return tag;
     }

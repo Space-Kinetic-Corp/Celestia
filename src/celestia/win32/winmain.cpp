@@ -1621,6 +1621,8 @@ static HMENU CreateAlternateSurfaceMenu(const T& surfaces)
     return menu;
 }
 
+// Hide vector menu for VTS as coordinate system shown is inaccurate for its data
+#define HIDEVECTORMENUFORVTS 1
 
 VOID APIENTRY handlePopupMenu(HWND hwnd,
                               float x, float y,
@@ -1641,6 +1643,7 @@ VOID APIENTRY handlePopupMenu(HWND hwnd,
             AppendMenu(hMenu, MF_STRING, ID_NAVIGATION_FOLLOW, UTF8ToCurrentCP(_("&Follow")).c_str());
             AppendMenu(hMenu, MF_STRING, ID_NAVIGATION_SYNCORBIT, UTF8ToCurrentCP(_("S&ync Orbit")).c_str());
             AppendMenu(hMenu, MF_STRING, ID_INFO, UTF8ToCurrentCP(_("&Info")).c_str());
+#ifndef HIDEVECTORMENUFORVTS
             HMENU refVectorMenu = CreatePopupMenu();
             AppendMenu(hMenu, MF_POPUP | MF_STRING, (UINT_PTR) refVectorMenu, UTF8ToCurrentCP(_("&Reference Marks")).c_str());
             AppendMenu(refVectorMenu, MF_STRING, ID_RENDER_BODY_AXES, UTF8ToCurrentCP(_("Show Body Axes")).c_str());
@@ -1658,7 +1661,7 @@ VOID APIENTRY handlePopupMenu(HWND hwnd,
             CheckMenuItem(refVectorMenu, ID_RENDER_TERMINATOR, sel.body()->findReferenceMark("terminator") ? MF_CHECKED : MF_UNCHECKED);
 
             AppendMenu(hMenu, MF_STRING, ID_SELECT_PRIMARY_BODY, UTF8ToCurrentCP(_("Select &Primary Body")).c_str());
-
+#endif // HIDEVECTORMENUFORVTS
             if (const PlanetarySystem* satellites = sel.body()->getSatellites();
                 satellites != nullptr && satellites->getSystemSize() != 0)
             {

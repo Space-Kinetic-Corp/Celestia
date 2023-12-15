@@ -26,16 +26,9 @@
 namespace celestia::ephem
 {
 
-namespace
-{
+//namespace
+//{
 
-struct OrientationSample
-{
-    Eigen::Quaternionf q;
-    double t;
-};
-
-using OrientationSampleVector = std::vector<OrientationSample>;
 
 /*!
  * Sampled orientation files are ASCII text files containing a sequence of
@@ -66,46 +59,7 @@ bool operator<(const OrientationSample& a, const OrientationSample& b)
     return a.t < b.t;
 }
 
-/*! SampledOrientation is a rotation model that interpolates a sequence
- *  of quaternion keyframes. Typically, an instance of SampledRotation will
- *  be created from a file with LoadSampledOrientation().
- */
-class SampledOrientation : public RotationModel
-{
-public:
-    SampledOrientation() = default;
-    ~SampledOrientation() override = default;
 
-    /*! Add another quaternion key to the sampled orientation. The keys
-     *  should have monotonically increasing time values.
-     */
-    void addSample(double tjd, const Eigen::Quaternionf& q);
-
-    /*! The orientation of a sampled rotation model is entirely due
-     *  to spin (i.e. there's no notion of an equatorial frame.)
-     */
-    Eigen::Quaterniond spin(double tjd) const override;
-
-    bool isPeriodic() const override;
-    double getPeriod() const override;
-
-    void getValidRange(double& begin, double& end) const override;
-
-private:
-    Eigen::Quaternionf getOrientation(double tjd) const;
-
-private:
-    OrientationSampleVector samples;
-    mutable int lastSample{0};
-
-    enum InterpolationType
-    {
-        Linear = 0,
-        Cubic = 1,
-    };
-
-    InterpolationType interpolation{Linear};
-};
 
 
 void
@@ -215,7 +169,7 @@ SampledOrientation::getOrientation(double tjd) const
     return orientation;
 }
 
-} // end unnamed namespace
+//} // end unnamed namespace
 
 
 std::unique_ptr<RotationModel>

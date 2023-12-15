@@ -48,6 +48,15 @@ TrajectoryInfo::load(const ResourceKey& key) const
 {
     ContentType filetype = DetermineFileType(key.resolvedPath);
 
+    // retrieve colorFile in the same directory
+    std::string resolvedColorFilename ;
+    if( !colorSource.empty() )
+    {
+        auto nameStart = key.resolvedPath.string().rfind('/');
+        std::string baseDir(key.resolvedPath.string(), 0, nameStart);
+        resolvedColorFilename = baseDir + "/" + colorSource ;
+    }
+
     GetLogger()->debug("Loading trajectory: {}\n", key.resolvedPath);
 
     // TODO use unique_ptr here and replace the use of .release()
@@ -88,10 +97,10 @@ TrajectoryInfo::load(const ResourceKey& key) const
         switch (precision)
         {
         case TrajectoryPrecision::Single:
-            sampTrajectory = LoadSampledTrajectorySinglePrec(key.resolvedPath, interpolation);
+            sampTrajectory = LoadSampledTrajectorySinglePrec(key.resolvedPath, resolvedColorFilename, interpolation);
             break;
         case TrajectoryPrecision::Double:
-            sampTrajectory = LoadSampledTrajectoryDoublePrec(key.resolvedPath, interpolation);
+            sampTrajectory = LoadSampledTrajectoryDoublePrec(key.resolvedPath, resolvedColorFilename, interpolation);
             break;
         default:
             assert(0);

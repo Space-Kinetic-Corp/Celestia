@@ -13,7 +13,7 @@
 #include "celengine/timeline.h"
 #include "celengine/timelinephase.h"
 #include "celengine/frametree.h"
-#include "celengine/frame.h"
+#include "celephem/orbit.h"
 
 using namespace std;
 
@@ -129,5 +129,18 @@ Timeline::markChanged()
     {
         for (const auto &phase : phases)
             phase->getFrameTree()->markChanged();
+    }
+}
+
+// VTS //
+/* Modif VTS pour prendre en compte le d placement des objets
+* pendant le grossissement du satellite
+ */
+void Timeline::setMagCoeff( float coeff )
+{
+    for (auto iter = phases.begin(); iter != phases.end(); iter++)
+    {
+        auto phase = *iter;
+        phase->orbit()->setMagCoeff( coeff ) ;
     }
 }

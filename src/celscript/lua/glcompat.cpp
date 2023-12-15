@@ -345,6 +345,7 @@ fpcPopMatrix() noexcept
     }
 }
 
+
 void
 fpcLoadIdentity() noexcept
 {

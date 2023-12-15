@@ -43,6 +43,7 @@
 #include "celx_category.h"
 
 
+
 using namespace Eigen;
 using namespace std;
 using celestia::util::GetLogger;
@@ -319,7 +320,8 @@ bool LuaState::createThread()
     if (costate == nullptr)
         return false;
 
-    lua_sethook(costate, checkTimeslice, LUA_MASKCOUNT, 1000);
+    // VTS //
+//    lua_sethook(costate, checkTimeslice, LUA_MASKCOUNT, 1000);
     lua_pushvalue(state, -2);
     lua_xmove(state, costate, 1);  // move function from L to NL/
     alive = true;

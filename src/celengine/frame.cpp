@@ -11,11 +11,11 @@
 // of the License, or (at your option) any later version.
 
 #include <cassert>
-#include <celengine/star.h>
 #include <celengine/body.h>
 #include <celengine/deepskyobj.h>
-#include <celengine/location.h>
 #include <celengine/frame.h>
+#include <celengine/location.h>
+#include <celengine/star.h>
 
 using namespace Eigen;
 using namespace std;
@@ -26,19 +26,18 @@ namespace astro = celestia::astro;
 // are Julian days.
 static const double ANGULAR_VELOCITY_DIFF_DELTA = 1.0 / 1440.0;
 
-
 /*** ReferenceFrame ***/
 
-ReferenceFrame::ReferenceFrame(Selection center) :
-    centerObject(center)
+ReferenceFrame::ReferenceFrame(Selection center) : centerObject(center)
 {
 }
 
 // High-precision rotation using 64.64 fixed point path. Rotate uc by
 // the rotation specified by unit quaternion q.
-static UniversalCoord rotate(const UniversalCoord& uc, const Quaterniond& q)
+static UniversalCoord
+rotate(const UniversalCoord &uc, const Quaterniond &q)
 {
-    Matrix3d r = q.toRotationMatrix();
+    Matrix3d       r = q.toRotationMatrix();
     UniversalCoord uc1;
 
     uc1.x = uc.x * R128(r(0, 0)) + uc.y * R128(r(1, 0)) + uc.z * R128(r(2, 0));
@@ -48,7 +47,6 @@ static UniversalCoord rotate(const UniversalCoord& uc, const Quaterniond& q)
     return uc1;
 }
 
-
 /*! Convert from universal coordinates to frame coordinates. This method
  *  uses 64.64 fixed point arithmetic in conversion, and is thus /much/ slower
  *  than convertFromAstrocentric(), which works with double precision
@@ -56,19 +54,17 @@ static UniversalCoord rotate(const UniversalCoord& uc, const Quaterniond& q)
  *  solar system, convertFromAstrocentric() should be used.
  */
 UniversalCoord
-ReferenceFrame::convertFromUniversal(const UniversalCoord& uc, double tjd) const
+ReferenceFrame::convertFromUniversal(const UniversalCoord &uc, double tjd) const
 {
     UniversalCoord uc1 = uc - centerObject.getPosition(tjd);
     return rotate(uc1, getOrientation(tjd).conjugate());
 }
 
-
 Quaterniond
-ReferenceFrame::convertFromUniversal(const Quaterniond& q, double tjd) const
+ReferenceFrame::convertFromUniversal(const Quaterniond &q, double tjd) const
 {
     return q * getOrientation(tjd).conjugate();
 }
-
 
 /*! Convert from local coordinates to universal coordinates. This method
  *  uses 64.64 fixed point arithmetic in conversion, and is thus /much/ slower
@@ -82,21 +78,19 @@ ReferenceFrame::convertFromUniversal(const Quaterniond& q, double tjd) const
  *  expensive high-precision multiplication.
  */
 UniversalCoord
-ReferenceFrame::convertToUniversal(const UniversalCoord& uc, double tjd) const
+ReferenceFrame::convertToUniversal(const UniversalCoord &uc, double tjd) const
 {
     return centerObject.getPosition(tjd) + rotate(uc, getOrientation(tjd));
 }
 
-
 Quaterniond
-ReferenceFrame::convertToUniversal(const Quaterniond& q, double tjd) const
+ReferenceFrame::convertToUniversal(const Quaterniond &q, double tjd) const
 {
     return q * getOrientation(tjd);
 }
 
-
 Vector3d
-ReferenceFrame::convertFromAstrocentric(const Vector3d& p, double tjd) const
+ReferenceFrame::convertFromAstrocentric(const Vector3d &p, double tjd) const
 {
     if (centerObject.getType() == SelectionType::Body)
     {
@@ -116,9 +110,8 @@ ReferenceFrame::convertFromAstrocentric(const Vector3d& p, double tjd) const
     }
 }
 
-
 Vector3d
-ReferenceFrame::convertToAstrocentric(const Vector3d& p, double tjd) const
+ReferenceFrame::convertToAstrocentric(const Vector3d &p, double tjd) const
 {
     if (centerObject.getType() == SelectionType::Body)
     {
@@ -138,7 +131,6 @@ ReferenceFrame::convertToAstrocentric(const Vector3d& p, double tjd) const
     }
 }
 
-
 /*! Return the object that is the defined origin of the reference frame.
  */
 Selection
@@ -146,7 +138,6 @@ ReferenceFrame::getCenter() const
 {
     return centerObject;
 }
-
 
 Vector3d
 ReferenceFrame::getAngularVelocity(double tjd) const
@@ -160,22 +151,23 @@ ReferenceFrame::getAngularVelocity(double tjd) const
     return dq.vec().normalized() * (2.0 * acos(dq.w()) / ANGULAR_VELOCITY_DIFF_DELTA);
 }
 
-
 unsigned int
 ReferenceFrame::nestingDepth(unsigned int maxDepth, FrameType frameType) const
 {
     return this->nestingDepth(0, maxDepth, frameType);
 }
 
-
 static unsigned int
-getFrameDepth(const Selection& sel, unsigned int depth, unsigned int maxDepth,
-              ReferenceFrame::FrameType frameType)
+getFrameDepth(
+    const Selection          &sel,
+    unsigned int              depth,
+    unsigned int              maxDepth,
+    ReferenceFrame::FrameType frameType)
 {
     if (depth > maxDepth)
         return depth;
 
-    Body* body = sel.body();
+    Body *body = sel.body();
     if (sel.location() != nullptr)
         body = sel.location()->getParentBody();
 
@@ -185,9 +177,9 @@ getFrameDepth(const Selection& sel, unsigned int depth, unsigned int maxDepth,
     }
 
     unsigned int orbitFrameDepth = depth;
-    unsigned int bodyFrameDepth = depth;
+    unsigned int bodyFrameDepth  = depth;
     // TODO: need to check /all/ orbit frames of body
-    if (const ReferenceFrame* orbitFrame = body->getOrbitFrame(0.0).get();
+    if (const ReferenceFrame *orbitFrame = body->getOrbitFrame(0.0).get();
         orbitFrame != nullptr && frameType == ReferenceFrame::PositionFrame)
     {
         orbitFrameDepth = orbitFrame->nestingDepth(depth + 1, maxDepth, frameType);
@@ -195,7 +187,7 @@ getFrameDepth(const Selection& sel, unsigned int depth, unsigned int maxDepth,
             return orbitFrameDepth;
     }
 
-    if (const ReferenceFrame* bodyFrame = body->getBodyFrame(0.0).get();
+    if (const ReferenceFrame *bodyFrame = body->getBodyFrame(0.0).get();
         bodyFrame != nullptr && frameType == ReferenceFrame::OrientationFrame)
     {
         bodyFrameDepth = bodyFrame->nestingDepth(depth + 1, maxDepth, frameType);
@@ -204,15 +196,11 @@ getFrameDepth(const Selection& sel, unsigned int depth, unsigned int maxDepth,
     return max(orbitFrameDepth, bodyFrameDepth);
 }
 
-
-
 /*** J2000EclipticFrame ***/
 
-J2000EclipticFrame::J2000EclipticFrame(Selection center) :
-    ReferenceFrame(center)
+J2000EclipticFrame::J2000EclipticFrame(Selection center) : ReferenceFrame(center)
 {
 }
-
 
 bool
 J2000EclipticFrame::isInertial() const
@@ -220,23 +208,17 @@ J2000EclipticFrame::isInertial() const
     return true;
 }
 
-
 unsigned int
-J2000EclipticFrame::nestingDepth(unsigned int depth,
-                                 unsigned int maxDepth,
-                                 FrameType) const
+J2000EclipticFrame::nestingDepth(unsigned int depth, unsigned int maxDepth, FrameType) const
 {
     return getFrameDepth(getCenter(), depth, maxDepth, PositionFrame);
 }
 
-
 /*** J2000EquatorFrame ***/
 
-J2000EquatorFrame::J2000EquatorFrame(Selection center) :
-    ReferenceFrame(center)
+J2000EquatorFrame::J2000EquatorFrame(Selection center) : ReferenceFrame(center)
 {
 }
-
 
 Quaterniond
 J2000EquatorFrame::getOrientation(double /* tjd */) const
@@ -244,31 +226,24 @@ J2000EquatorFrame::getOrientation(double /* tjd */) const
     return Quaterniond(AngleAxis<double>(astro::J2000Obliquity, Vector3d::UnitX()));
 }
 
-
 bool
 J2000EquatorFrame::isInertial() const
 {
     return true;
 }
 
-
 unsigned int
-J2000EquatorFrame::nestingDepth(unsigned int depth,
-                                unsigned int maxDepth,
-                                FrameType) const
+J2000EquatorFrame::nestingDepth(unsigned int depth, unsigned int maxDepth, FrameType) const
 {
     return getFrameDepth(getCenter(), depth, maxDepth, PositionFrame);
 }
 
-
 /*** BodyFixedFrame ***/
 
 BodyFixedFrame::BodyFixedFrame(Selection center, Selection obj) :
-    ReferenceFrame(center),
-    fixObject(obj)
+    ReferenceFrame(center), fixObject(obj)
 {
 }
-
 
 Quaterniond
 BodyFixedFrame::getOrientation(double tjd) const
@@ -293,7 +268,6 @@ BodyFixedFrame::getOrientation(double tjd) const
     }
 }
 
-
 Vector3d
 BodyFixedFrame::getAngularVelocity(double tjd) const
 {
@@ -313,18 +287,14 @@ BodyFixedFrame::getAngularVelocity(double tjd) const
     }
 }
 
-
 bool
 BodyFixedFrame::isInertial() const
 {
     return false;
 }
 
-
 unsigned int
-BodyFixedFrame::nestingDepth(unsigned int depth,
-                             unsigned int maxDepth,
-                             FrameType) const
+BodyFixedFrame::nestingDepth(unsigned int depth, unsigned int maxDepth, FrameType) const
 {
     unsigned int n = getFrameDepth(getCenter(), depth, maxDepth, PositionFrame);
     if (n > maxDepth)
@@ -338,29 +308,17 @@ BodyFixedFrame::nestingDepth(unsigned int depth,
     }
 }
 
-
 /*** BodyMeanEquatorFrame ***/
 
-BodyMeanEquatorFrame::BodyMeanEquatorFrame(Selection center,
-                                           Selection obj) :
-    ReferenceFrame(center),
-    equatorObject(obj),
-    freezeEpoch(astro::J2000),
-    isFrozen(false)
+BodyMeanEquatorFrame::BodyMeanEquatorFrame(Selection center, Selection obj) :
+    ReferenceFrame(center), equatorObject(obj), freezeEpoch(astro::J2000), isFrozen(false)
 {
 }
 
-
-BodyMeanEquatorFrame::BodyMeanEquatorFrame(Selection center,
-                                           Selection obj,
-                                           double freeze) :
-    ReferenceFrame(center),
-    equatorObject(obj),
-    freezeEpoch(freeze),
-    isFrozen(true)
+BodyMeanEquatorFrame::BodyMeanEquatorFrame(Selection center, Selection obj, double freeze) :
+    ReferenceFrame(center), equatorObject(obj), freezeEpoch(freeze), isFrozen(true)
 {
 }
-
 
 Quaterniond
 BodyMeanEquatorFrame::getOrientation(double tjd) const
@@ -377,7 +335,6 @@ BodyMeanEquatorFrame::getOrientation(double tjd) const
         return Quaterniond::Identity();
     }
 }
-
 
 Vector3d
 BodyMeanEquatorFrame::getAngularVelocity(double tjd) const
@@ -398,7 +355,6 @@ BodyMeanEquatorFrame::getAngularVelocity(double tjd) const
         }
     }
 }
-
 
 bool
 BodyMeanEquatorFrame::isInertial() const
@@ -424,14 +380,11 @@ BodyMeanEquatorFrame::isInertial() const
     }
 }
 
-
 unsigned int
-BodyMeanEquatorFrame::nestingDepth(unsigned int depth,
-                                   unsigned int maxDepth,
-                                   FrameType) const
+BodyMeanEquatorFrame::nestingDepth(unsigned int depth, unsigned int maxDepth, FrameType) const
 {
     // Test origin and equator object (typically the same) frames
-    unsigned int n =  getFrameDepth(getCenter(), depth, maxDepth, PositionFrame);
+    unsigned int n = getFrameDepth(getCenter(), depth, maxDepth, PositionFrame);
     if (n > maxDepth)
     {
         return n;
@@ -443,64 +396,59 @@ BodyMeanEquatorFrame::nestingDepth(unsigned int depth,
     }
 }
 
-
 /*** CachingFrame ***/
 
 CachingFrame::CachingFrame(Selection _center) :
-    ReferenceFrame(_center),
-    lastTime(-1.0e50),
-    lastOrientation(Quaterniond::Identity()),
-    lastAngularVelocity(0.0, 0.0, 0.0),
-    orientationCacheValid(false),
+    ReferenceFrame(_center), lastTime(-1.0e50), lastOrientation(Quaterniond::Identity()),
+    lastAngularVelocity(0.0, 0.0, 0.0), orientationCacheValid(false),
     angularVelocityCacheValid(false)
 {
 }
-
 
 Quaterniond
 CachingFrame::getOrientation(double tjd) const
 {
     if (tjd != lastTime)
     {
-        lastTime = tjd;
-        lastOrientation = computeOrientation(tjd);
-        orientationCacheValid = true;
+        lastTime                  = tjd;
+        lastOrientation           = computeOrientation(tjd);
+        orientationCacheValid     = true;
         angularVelocityCacheValid = false;
     }
     else if (!orientationCacheValid)
     {
-        lastOrientation = computeOrientation(tjd);
+        lastOrientation       = computeOrientation(tjd);
         orientationCacheValid = true;
     }
 
     return lastOrientation;
 }
 
-
-Vector3d CachingFrame::getAngularVelocity(double tjd) const
+Vector3d
+CachingFrame::getAngularVelocity(double tjd) const
 {
     if (tjd != lastTime)
     {
-        lastTime = tjd;
-        lastAngularVelocity = computeAngularVelocity(tjd);
-        orientationCacheValid = false;
+        lastTime                  = tjd;
+        lastAngularVelocity       = computeAngularVelocity(tjd);
+        orientationCacheValid     = false;
         angularVelocityCacheValid = true;
     }
     else if (!angularVelocityCacheValid)
     {
-        lastAngularVelocity = computeAngularVelocity(tjd);
+        lastAngularVelocity       = computeAngularVelocity(tjd);
         angularVelocityCacheValid = true;
     }
 
     return lastAngularVelocity;
 }
 
-
 /*! Calculate the angular velocity at the specified time (units are
  *  radians / Julian day.) The default implementation just
  *  differentiates the orientation.
  */
-Vector3d CachingFrame::computeAngularVelocity(double tjd) const
+Vector3d
+CachingFrame::computeAngularVelocity(double tjd) const
 {
     Quaterniond q0 = getOrientation(tjd);
 
@@ -522,24 +470,20 @@ Vector3d CachingFrame::computeAngularVelocity(double tjd) const
     }
 }
 
-
-
 /*** TwoVectorFrame ***/
 
 // Minimum angle permitted between primary and secondary axes of
 // a two-vector frame.
 const double TwoVectorFrame::Tolerance = 1.0e-6;
 
-TwoVectorFrame::TwoVectorFrame(Selection center,
-                               const FrameVector& prim,
-                               int primAxis,
-                               const FrameVector& sec,
-                               int secAxis) :
+TwoVectorFrame::TwoVectorFrame(
+    Selection          center,
+    const FrameVector &prim,
+    int                primAxis,
+    const FrameVector &sec,
+    int                secAxis) :
     CachingFrame(center),
-    primaryVector(prim),
-    primaryAxis(primAxis),
-    secondaryVector(sec),
-    secondaryAxis(secAxis)
+    primaryVector(prim), primaryAxis(primAxis), secondaryVector(sec), secondaryAxis(secAxis)
 {
     // Verify that primary and secondary axes are valid
     assert(primaryAxis != 0 && secondaryAxis != 0);
@@ -560,7 +504,6 @@ TwoVectorFrame::TwoVectorFrame(Selection center,
         tertiaryAxis = 3;
     }
 }
-
 
 Quaterniond
 TwoVectorFrame::computeOrientation(double tjd) const
@@ -631,7 +574,6 @@ TwoVectorFrame::computeOrientation(double tjd) const
     }
 }
 
-
 bool
 TwoVectorFrame::isInertial() const
 {
@@ -641,11 +583,8 @@ TwoVectorFrame::isInertial() const
     return true;
 }
 
-
 unsigned int
-TwoVectorFrame::nestingDepth(unsigned int depth,
-                             unsigned int maxDepth,
-                             FrameType) const
+TwoVectorFrame::nestingDepth(unsigned int depth, unsigned int maxDepth, FrameType) const
 {
     // Check nesting of the origin object as well as frames references by
     // the primary and secondary axes.
@@ -654,7 +593,7 @@ TwoVectorFrame::nestingDepth(unsigned int depth,
         return n;
 
     unsigned int m = primaryVector.nestingDepth(depth, maxDepth);
-    n = max(m, n);
+    n              = max(m, n);
     if (n > maxDepth)
         return n;
 
@@ -662,78 +601,61 @@ TwoVectorFrame::nestingDepth(unsigned int depth,
     return max(m, n);
 }
 
-
-
 // Copy constructor
-FrameVector::FrameVector(const FrameVector& fv) :
-    vecType(fv.vecType),
-    observer(fv.observer),
-    target(fv.target),
-    vec(fv.vec),
-    frame(fv.frame)
+FrameVector::FrameVector(const FrameVector &fv) :
+    vecType(fv.vecType), observer(fv.observer), target(fv.target), vec(fv.vec), frame(fv.frame)
 {
 }
 
-
 // Assignment operator (since we have a copy constructor)
-FrameVector&
-FrameVector::operator=(const FrameVector& fv)
+FrameVector &
+FrameVector::operator=(const FrameVector &fv)
 {
-    vecType = fv.vecType;
+    vecType  = fv.vecType;
     observer = fv.observer;
-    target = fv.target;
-    vec = fv.vec;
+    target   = fv.target;
+    vec      = fv.vec;
 
     frame = fv.frame;
 
     return *this;
 }
 
-
-
 FrameVector::FrameVector(FrameVectorType t) :
-    vecType(t),
-    observer(),
-    target(),
-    vec(0.0, 0.0, 0.0),
-    frame(nullptr)
+    vecType(t), observer(), target(), vec(0.0, 0.0, 0.0), frame(nullptr)
 {
 }
 
 FrameVector
-FrameVector::createRelativePositionVector(const Selection& _observer,
-                                          const Selection& _target)
+FrameVector::createRelativePositionVector(const Selection &_observer, const Selection &_target)
 {
     FrameVector fv(RelativePosition);
     fv.observer = _observer;
-    fv.target = _target;
+    fv.target   = _target;
 
     return fv;
 }
 
-
 FrameVector
-FrameVector::createRelativeVelocityVector(const Selection& _observer,
-                                          const Selection& _target)
+FrameVector::createRelativeVelocityVector(const Selection &_observer, const Selection &_target)
 {
     FrameVector fv(RelativeVelocity);
     fv.observer = _observer;
-    fv.target = _target;
+    fv.target   = _target;
 
     return fv;
 }
 
-
 FrameVector
-FrameVector::createConstantVector(const Vector3d& _vec,
-                                  const ReferenceFrame::SharedConstPtr& _frame)
+FrameVector::createConstantVector(
+    const Vector3d                       &_vec,
+    const ReferenceFrame::SharedConstPtr &_frame)
 {
     FrameVector fv(ConstantVector);
-    fv.vec = _vec;
+    fv.vec   = _vec;
     fv.frame = _frame;
     return fv;
 }
-
 
 Vector3d
 FrameVector::direction(double tjd) const
@@ -747,12 +669,12 @@ FrameVector::direction(double tjd) const
         break;
 
     case RelativeVelocity:
-        {
-            Vector3d v0 = observer.getVelocity(tjd);
-            Vector3d v1 = target.getVelocity(tjd);
-            v = v1 - v0;
-        }
-        break;
+    {
+        Vector3d v0 = observer.getVelocity(tjd);
+        Vector3d v1 = target.getVelocity(tjd);
+        v           = v1 - v0;
+    }
+    break;
 
     case ConstantVector:
         if (frame == nullptr)
@@ -770,28 +692,26 @@ FrameVector::direction(double tjd) const
     return v;
 }
 
-
 unsigned int
-FrameVector::nestingDepth(unsigned int depth,
-                          unsigned int maxDepth) const
+FrameVector::nestingDepth(unsigned int depth, unsigned int maxDepth) const
 {
     switch (vecType)
     {
     case RelativePosition:
     case RelativeVelocity:
+    {
+        unsigned int n = getFrameDepth(observer, depth, maxDepth, ReferenceFrame::PositionFrame);
+        if (n > maxDepth)
         {
-            unsigned int n = getFrameDepth(observer, depth, maxDepth, ReferenceFrame::PositionFrame);
-            if (n > maxDepth)
-            {
-                return n;
-            }
-            else
-            {
-                unsigned int m = getFrameDepth(target, depth, maxDepth, ReferenceFrame::PositionFrame);
-                return max(m, n);
-            }
+            return n;
         }
-        break;
+        else
+        {
+            unsigned int m = getFrameDepth(target, depth, maxDepth, ReferenceFrame::PositionFrame);
+            return max(m, n);
+        }
+    }
+    break;
 
     case ConstantVector:
         if (depth > maxDepth)

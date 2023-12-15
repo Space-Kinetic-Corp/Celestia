@@ -19,6 +19,8 @@ set(CELEPHEM_SOURCES
   samporient.h
   vsop87.cpp
   vsop87.h
+        chunkedorbit.cpp
+        chunkedorbit.h
 )
 
 if(ENABLE_SPICE)

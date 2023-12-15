@@ -148,3 +148,9 @@ constexpr Color operator*(Color a, const Color& b)
     a *= b;
     return a;
 }
+
+// Added a function to get a lighter color
+namespace color
+{
+Color lighten(const Color& color, float amount);
+}

@@ -23,6 +23,16 @@
 #include <celmath/mathlib.h>
 #include <celutil/arrayvector.h>
 
+
+// hack
+#include "footprint.h"
+
+#define VTS_SHADOW_VOLUME_1
+
+#ifdef VTS_SHADOW_VOLUME_1
+#include <celengine/triangulator.h>
+#endif //VTS_SHADOW_VOLUME_1
+
 #define PTR(p) (reinterpret_cast<const void*>(static_cast<std::uintptr_t>(p)))
 
 namespace
@@ -287,6 +297,20 @@ LODSphereMesh::~LODSphereMesh()
     glDeleteBuffers(1, &indexBuffer);
 }
 
+#ifdef VTS_SHADOW_VOLUME_1
+static Point3f spherePointLL(float longi, float lati)
+{
+    float theta = celmath::degToRad(180 - longi);
+    float phi = celmath::degToRad(lati);
+
+    float factor = 2.500501f;
+    Point3f point(cos((float)phi) * cos((float)theta),
+                  sin((float)phi),
+                  cos((float)phi) * sin((float)theta));
+    point *= factor;
+    return point;
+}
+#endif //VTS_SHADOW_VOLUME_1
 
 void
 LODSphereMesh::render(const celmath::Frustum& frustum,
